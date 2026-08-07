@@ -908,6 +908,8 @@ export interface ExtensionSidebarViewProps {
   theme: ExtensionSidebarTheme;
   /** Resolved command bindings; use these instead of hard-coding sidebar chords. */
   keybindings: ExtensionSidebarKeybindings;
+  /** Host-owned review-range state and replacement. */
+  review: ExtensionReviewControls;
   actions: ExtensionSidebarActions;
 }
 
@@ -1118,6 +1120,30 @@ export interface ExtensionReviewSelection {
   readonly hunkIndex: number | null;
 }
 
+/** Whether this session can replace its current VCS comparison range. */
+export type ExtensionReviewRangeState =
+  | { available: true; value?: string }
+  | { available: false; detail: string };
+
+/** How one host-mediated review-range replacement settled. */
+export type ExtensionReviewRangeResult =
+  | { ok: true }
+  | { ok: false; reason: "unavailable" | "failed"; detail: string };
+
+/** Inspect and replace the current VCS comparison range through Hunk's reload boundary. */
+export interface ExtensionReviewControls {
+  /** Snapshot of the range state when these controls were created. */
+  readonly range: ExtensionReviewRangeState;
+  /**
+   * Replace the current review with one VCS range, preserving the active Hunk view.
+   *
+   * A blank or non-string range rejects as an extension bug. Unsupported review
+   * kinds resolve `unavailable`; a VCS or reload failure resolves `failed` with
+   * displayable detail.
+   */
+  setRange(range: string): Promise<ExtensionReviewRangeResult>;
+}
+
 /** One question put to the user as a modal confirm dialog. */
 export interface ExtensionConfirmOptions {
   title: string;
@@ -1306,6 +1332,8 @@ export interface ExtensionWorkspace {
 /** What a command handler receives when its key fires. */
 export interface ExtensionCommandContext extends ExtensionContext {
   sidebars: ExtensionSidebarControls;
+  /** Host-owned review-range state and replacement. */
+  readonly review: ExtensionReviewControls;
   /** Host-owned selection controls for alternate file presentations. */
   fileViews: ExtensionFileViewControls;
   /**

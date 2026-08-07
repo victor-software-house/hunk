@@ -151,6 +151,16 @@ resolve reviewed file ids through the existing source fetcher, which retains
 ownership of caching and size limits. Missing or unreadable sources become
 `null`.
 
+`src/ui/lib/extensionReview.ts` owns the narrow `ctx.review` range policy. It
+exposes only whether the current input can express a VCS range, normalizes one
+non-empty range, and replaces that field while preserving the VCS input's
+pathspecs and options. `App` supplies the live action through its existing soft
+reload path, so extensions never receive raw `CliInput` or an unbounded reload
+callback; `AppHost` still enforces launch authority, filesystem bounds, config
+normalization, daemon registration, and lifecycle events. The same controls are
+passed to command handlers and sidebar props so visual navigators and commands
+share one reload contract.
+
 Writes are limited to reloadable working-tree reviews and reviewed paths inside
 the review root. App supplies the current input, unfiltered changeset, and root
 through refs so soft reloads update the policy inputs. The host verifies the

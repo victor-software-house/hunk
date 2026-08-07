@@ -1053,6 +1053,40 @@ hunk index is clamped into the file's real range.
 A handler may be async; a failure (sync or rejected) becomes a warning naming
 your extension.
 
+#### Review ranges
+
+`ctx.review` exposes the current VCS comparison range and can replace it through
+Hunk's own reload boundary:
+
+```ts
+hunk.registerCommand({ id: "compare-main", title: "Compare main to HEAD" }, async (ctx) => {
+  if (!ctx.review.range.available) {
+    ctx.notify(ctx.review.range.detail, "warning");
+    return;
+  }
+
+  const result = await ctx.review.setRange("main...HEAD");
+  if (!result.ok) ctx.notify(result.detail, "warning");
+});
+```
+
+`range` is a snapshot from when the command context or sidebar props were built.
+An available value is absent for a working-tree review and contains the current
+range for a range review. Non-VCS and non-reloadable sessions carry
+`available: false` with a displayable reason.
+
+`setRange(range)` trims and requires a non-empty range, then performs the same
+bounded soft reload as Hunk's refresh path while preserving the current layout,
+theme, notes, line numbers, menu, and wrapping choices. It keeps the current VCS
+backend and pathspecs, clears `--staged`, validates the reload against the
+session's original root, refreshes daemon state, and emits ordinary reload
+events. An unsupported session resolves `unavailable`; a VCS or reload failure
+resolves `failed`. Malformed arguments reject as extension bugs.
+
+Custom sidebar views receive the same capability as `props.review`, so a
+navigator can change ranges without shelling out or bypassing Hunk's session
+policy.
+
 #### Asking the user
 
 `ctx.dialogs` puts a question on screen and waits for the answer. Three shapes,

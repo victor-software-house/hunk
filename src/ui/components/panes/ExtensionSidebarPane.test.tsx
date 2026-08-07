@@ -3,6 +3,7 @@ import { testRender } from "@opentui/react/test-utils";
 import { act, useState, type ReactNode } from "react";
 import { createTestDiffFile } from "../../../../test/helpers/diff-helpers";
 import type {
+  ExtensionReviewControls,
   ExtensionSidebarActions,
   ExtensionSidebarKeybindings,
   ExtensionSidebarViewProps,
@@ -23,6 +24,11 @@ function registeredView(component: (props: ExtensionSidebarViewProps) => ReactNo
 const TEST_KEYBINDINGS: ExtensionSidebarKeybindings = {
   matches: () => false,
   getKeys: () => [],
+};
+
+const TEST_REVIEW: ExtensionReviewControls = {
+  range: { available: true },
+  setRange: async () => ({ ok: true }),
 };
 
 function createTestFiles() {
@@ -83,6 +89,7 @@ describe("ExtensionSidebarPane actions", () => {
         theme={theme}
         width={30}
         keybindings={TEST_KEYBINDINGS}
+        review={TEST_REVIEW}
         notify={(message) => notifications.push(message)}
         onSelectFile={() => {}}
         onSelectHunk={(fileId, hunkIndex) => hunkSelections.push([fileId, hunkIndex])}
@@ -146,6 +153,7 @@ describe("ExtensionSidebarPane failure recovery", () => {
           theme={theme}
           width={30}
           keybindings={TEST_KEYBINDINGS}
+          review={TEST_REVIEW}
           notify={(message) => notifications.push(message)}
           onSelectFile={() => {}}
           onSelectHunk={() => {}}
