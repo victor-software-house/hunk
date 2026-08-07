@@ -795,6 +795,8 @@ export interface ExtensionVcsAdapter {
    * priorities fall back to registration order.
    */
   detectionPriority?: number;
+  /** Optional read-only history used by review navigators. */
+  loadHistory?(context: ExtensionVcsLoadContext): Promise<ExtensionReviewHistory>;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1130,6 +1132,33 @@ export type ExtensionReviewRangeResult =
   | { ok: true }
   | { ok: false; reason: "unavailable" | "failed"; detail: string };
 
+/** One commit in the active VCS backend's bounded local history. */
+export interface ExtensionReviewHistoryCommit {
+  id: string;
+  parentIds: readonly string[];
+  subject: string;
+  committedAt: string;
+}
+
+/** One local branch, remote branch, or tag pointing into the returned history. */
+export interface ExtensionReviewHistoryRef {
+  name: string;
+  kind: "branch" | "remote" | "tag";
+  commitId: string;
+  current?: boolean;
+}
+
+/** Read-only history available to a review navigator. */
+export interface ExtensionReviewHistory {
+  commits: readonly ExtensionReviewHistoryCommit[];
+  refs: readonly ExtensionReviewHistoryRef[];
+}
+
+/** How an adapter-backed history request settled. */
+export type ExtensionReviewHistoryResult =
+  | { ok: true; history: ExtensionReviewHistory }
+  | { ok: false; reason: "unavailable" | "failed"; detail: string };
+
 /** Inspect and replace the current VCS comparison range through Hunk's reload boundary. */
 export interface ExtensionReviewControls {
   /** Snapshot of the range state when these controls were created. */
@@ -1142,6 +1171,8 @@ export interface ExtensionReviewControls {
    * displayable detail.
    */
   setRange(range: string): Promise<ExtensionReviewRangeResult>;
+  /** Load bounded local history through the active VCS adapter. */
+  loadHistory(): Promise<ExtensionReviewHistoryResult>;
 }
 
 /** One question put to the user as a modal confirm dialog. */

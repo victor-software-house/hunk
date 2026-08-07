@@ -89,6 +89,8 @@ async function launchRangeExtension(repo: string, range: string, logPath: string
       `export default function (hunk) {\n` +
       `  hunk.registerCommand({ id: "range", title: "Range", key: "y" }, async (ctx) => {\n` +
       `    appendFileSync(${JSON.stringify(logPath)}, "state " + JSON.stringify(ctx.review.range) + "\\n");\n` +
+      `    const history = await ctx.review.loadHistory();\n` +
+      `    appendFileSync(${JSON.stringify(logPath)}, "history " + JSON.stringify(history) + "\\n");\n` +
       `    const result = await ctx.review.setRange(${JSON.stringify(range)});\n` +
       `    appendFileSync(${JSON.stringify(logPath)}, "result " + JSON.stringify(result) + "\\n");\n` +
       `  });\n` +
@@ -143,6 +145,8 @@ describe("extension review range controls", () => {
       );
 
       expect(readProbe(logPath)).toContain('state {"available":true,"value":"HEAD~1...HEAD"}');
+      expect(readProbe(logPath)).toContain('history {"ok":true');
+      expect(readProbe(logPath)).toContain('"subject":"head"');
     } finally {
       await act(async () => {
         setup.renderer.destroy();

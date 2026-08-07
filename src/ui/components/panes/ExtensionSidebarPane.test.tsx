@@ -29,6 +29,7 @@ const TEST_KEYBINDINGS: ExtensionSidebarKeybindings = {
 const TEST_REVIEW: ExtensionReviewControls = {
   range: { available: true },
   setRange: async () => ({ ok: true }),
+  loadHistory: async () => ({ ok: true, history: { commits: [], refs: [] } }),
 };
 
 function createTestFiles() {

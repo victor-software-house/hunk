@@ -268,6 +268,12 @@ optional, and each optional field buys one thing:
 | `sourceCacheKey` | stable source-snapshot identity for highlight reuse across reloads |
 | `extraFiles`     | files reviewed outside the patch, including skipped placeholders   |
 
+An adapter may also implement `loadHistory(context)` for review navigators. It
+returns bounded local commits plus branch, remote-branch, and tag refs; Hunk
+contains failures and exposes the result through `ctx.review.loadHistory()`.
+This capability is read-only and independent of the three review operations.
+The bundled Git adapter is the reference implementation.
+
 `untrackedPaths` is the shorthand: list the repo-root-relative paths your VCS
 reports as unknown and Hunk synthesizes the added-file diffs for you, skipping
 binaries and files too large to render. Honor `input.options.excludeUntracked`
@@ -1085,7 +1091,12 @@ resolves `failed`. Malformed arguments reject as extension bugs.
 
 Custom sidebar views receive the same capability as `props.review`, so a
 navigator can change ranges without shelling out or bypassing Hunk's session
-policy.
+policy. `ctx.review.loadHistory()` (and the sidebar equivalent) resolves either
+`{ ok: true, history: { commits, refs } }` or an `unavailable` / `failed`
+result. Commit rows carry id, parents, subject, and ISO commit time; refs carry
+a selectable name, kind, target commit, and current-branch marker. An active
+backend that does not implement history reports `unavailable` rather than
+falling back to Git behind its back.
 
 #### Asking the user
 

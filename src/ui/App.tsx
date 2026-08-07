@@ -22,6 +22,7 @@ import type {
   UserNoteLineTarget,
 } from "../core/types";
 import { canReloadInput } from "../core/inputReload";
+import { getConfiguredVcsAdapter } from "../core/vcs";
 import { sanitizeTerminalLine } from "../lib/terminalText";
 import { resolveExtensionCommands, resolveExtensionFileViews } from "../extensions/apply";
 import {
@@ -36,6 +37,7 @@ import type {
   ExtensionFileSide,
   ExtensionNotifyType,
   ExtensionReviewControls,
+  ExtensionReviewHistoryResult,
   ExtensionReviewNote,
   ExtensionReviewRangeResult,
   ExtensionSidebarControls,
@@ -751,8 +753,44 @@ export function App({
         setRange(range: string) {
           return setExtensionReviewRangeRef.current(range);
         },
+        async loadHistory(): Promise<ExtensionReviewHistoryResult> {
+          if (bootstrap.input.kind !== "vcs") {
+            return {
+              ok: false,
+              reason: "unavailable",
+              detail: "Review history is available only for VCS diff sessions.",
+            };
+          }
+
+          const adapter = getConfiguredVcsAdapter(
+            bootstrap.input.options.vcs,
+            bootstrap.reloadContext.vcsAdapters,
+          );
+          if (!adapter.loadHistory) {
+            return {
+              ok: false,
+              reason: "unavailable",
+              detail: `${adapter.name} does not provide review history.`,
+            };
+          }
+
+          try {
+            const history = await adapter.loadHistory({
+              cwd: bootstrap.reloadContext.repoRoot ?? bootstrap.reloadContext.cwd,
+            });
+            return { ok: true, history };
+          } catch (error) {
+            return {
+              ok: false,
+              reason: "failed",
+              detail: `Failed to load ${adapter.name} history • ${
+                error instanceof Error ? error.message || error.name : String(error)
+              }`,
+            };
+          }
+        },
       }),
-    [bootstrap.input],
+    [bootstrap.input, bootstrap.reloadContext],
   );
 
   // Lifecycle and bus listeners receive the same sidebar controls as commands,

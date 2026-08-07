@@ -459,7 +459,11 @@ describe("UI components", () => {
         theme={theme}
         width={30}
         keybindings={{ matches: () => false, getKeys: () => [] }}
-        review={{ range: { available: true }, setRange: async () => ({ ok: true }) }}
+        review={{
+          range: { available: true },
+          setRange: async () => ({ ok: true }),
+          loadHistory: async () => ({ ok: true, history: { commits: [], refs: [] } }),
+        }}
         actions={{ selectFile: () => {}, selectHunk: () => {}, notify: () => {} }}
       />,
       36,

@@ -192,6 +192,11 @@ none — which is why the visible menu list is derived from the menus record
 
 ## VCS adapters
 
+Review history is an optional adapter capability beside review operations. The
+public rows contain only bounded commit/ref identity and presentation metadata;
+`src/extensions/default/vcs/git/history.ts` is the bundled reference. Hunk never
+silently runs Git history for a session owned by another backend.
+
 `src/core/vcs/index.ts` is the single assembly point ordering bundled + user
 adapters by `detectionPriority` (Git is the baseline at 0; jj 200 / sl 100
 sit above it for colocated checkouts — the constants in
