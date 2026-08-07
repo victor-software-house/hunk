@@ -89,21 +89,29 @@ export function useHunkSessionBridge({
 
   useEffect(() => {
     const selectedRange = selectedHunk ? hunkLineRange(selectedHunk) : undefined;
+    const activeTabId = hostClient?.getRegistration().info.activeTabId;
+    if (!hostClient || !activeTabId) return;
 
-    hostClient?.updateSnapshot({
+    hostClient.updateSnapshot({
       updatedAt: new Date().toISOString(),
       state: {
-        selectedFileId: selectedFile?.id,
-        selectedFilePath: selectedFile?.path,
-        selectedHunkIndex,
-        selectedHunkOldRange: selectedRange?.oldRange,
-        selectedHunkNewRange: selectedRange?.newRange,
-        showAgentNotes,
-        noteMarkupWidth,
-        liveCommentCount,
-        liveComments: liveCommentSummaries,
-        reviewNoteCount,
-        reviewNotes: reviewNoteSummaries,
+        activeTabId,
+        tabs: [
+          {
+            tabId: activeTabId,
+            selectedFileId: selectedFile?.id,
+            selectedFilePath: selectedFile?.path,
+            selectedHunkIndex,
+            selectedHunkOldRange: selectedRange?.oldRange,
+            selectedHunkNewRange: selectedRange?.newRange,
+            showAgentNotes,
+            noteMarkupWidth,
+            liveCommentCount,
+            liveComments: liveCommentSummaries,
+            reviewNoteCount,
+            reviewNotes: reviewNoteSummaries,
+          },
+        ],
       },
     });
   }, [

@@ -41,8 +41,13 @@ export interface SelectedHunkSummary {
   newRange?: [number, number];
 }
 
-/** App-owned registration data that the broker carries without interpreting. */
-export interface HunkSessionInfo {
+/** One review tab's immutable registration data. */
+export interface HunkReviewTabInfo {
+  tabId: string;
+  name: string;
+  cwd: string;
+  repoRoot?: string;
+  input: CliInput;
   inputKind: CliInput["kind"];
   title: string;
   sourceLabel: string;
@@ -50,20 +55,33 @@ export interface HunkSessionInfo {
   files: SessionReviewFile[];
 }
 
-/** App-owned live state that the broker snapshots and rebroadcasts. */
-export interface HunkSessionState {
+/** One review tab's live state. */
+export interface HunkReviewTabState {
+  tabId: string;
   selectedFileId?: string;
   selectedFilePath?: string;
   selectedHunkIndex: number;
   selectedHunkOldRange?: [number, number];
   selectedHunkNewRange?: [number, number];
   showAgentNotes: boolean;
-  /** Width STML note markup renders at in the session's current layout ("new"-side anchor). */
+  /** Width STML note markup renders at in this tab's current layout. */
   noteMarkupWidth?: number;
   liveCommentCount: number;
   liveComments: SessionLiveCommentSummary[];
   reviewNoteCount?: number;
   reviewNotes?: SessionReviewNoteSummary[];
+}
+
+/** App-owned registration data that the broker carries without interpreting. */
+export interface HunkSessionInfo {
+  activeTabId: string;
+  tabs: HunkReviewTabInfo[];
+}
+
+/** App-owned live state that the broker snapshots and rebroadcasts. */
+export interface HunkSessionState {
+  activeTabId: string;
+  tabs: HunkReviewTabState[];
 }
 
 export type HunkSessionRegistration = SessionRegistration<HunkSessionInfo>;
@@ -199,53 +217,64 @@ export interface ReloadedSessionResult {
   selectedHunkIndex: number;
 }
 
+/** One listed review tab with summarized files and its live state nested beside it. */
+export interface ListedReviewTab extends Omit<HunkReviewTabInfo, "files"> {
+  files: SessionFileSummary[];
+  state: HunkReviewTabState;
+}
+
 export interface ListedSession {
   sessionId: string;
   pid: number;
   cwd: string;
-  repoRoot?: string;
   launchedAt: string;
   terminal?: SessionTerminalMetadata;
-  inputKind: CliInput["kind"];
-  title: string;
-  sourceLabel: string;
-  experimentalFeatures?: ExperimentalFeature[];
-  fileCount: number;
-  files: SessionFileSummary[];
-  snapshot: HunkSessionSnapshot;
+  activeTabId: string;
+  tabs: ListedReviewTab[];
+  /** Broker envelope timestamp retained for ordering live processes. */
+  snapshot: { updatedAt: string };
 }
 
 export interface SelectedSessionContext {
   sessionId: string;
-  title: string;
-  sourceLabel: string;
-  cwd?: string;
-  repoRoot?: string;
-  inputKind: CliInput["kind"];
-  experimentalFeatures?: ExperimentalFeature[];
-  selectedFile: SessionFileSummary | null;
-  selectedHunk: SelectedHunkSummary | null;
-  showAgentNotes: boolean;
-  /** Width STML note markup renders at in the session's current layout. */
-  noteMarkupWidth?: number;
-  liveCommentCount: number;
+  activeTabId: string;
+  tab: {
+    tabId: string;
+    name: string;
+    cwd: string;
+    repoRoot?: string;
+    inputKind: CliInput["kind"];
+    title: string;
+    sourceLabel: string;
+    experimentalFeatures?: ExperimentalFeature[];
+    selectedFile: SessionFileSummary | null;
+    selectedHunk: SelectedHunkSummary | null;
+    showAgentNotes: boolean;
+    noteMarkupWidth?: number;
+    liveCommentCount: number;
+  };
 }
 
 export interface SessionReview {
   sessionId: string;
-  title: string;
-  sourceLabel: string;
-  cwd?: string;
-  repoRoot?: string;
-  inputKind: CliInput["kind"];
-  experimentalFeatures?: ExperimentalFeature[];
-  selectedFile: SessionReviewFile | null;
-  selectedHunk: SessionReviewHunk | null;
-  showAgentNotes: boolean;
-  liveCommentCount: number;
-  reviewNoteCount?: number;
-  reviewNotes?: SessionReviewNoteSummary[];
-  files: SessionReviewFile[];
+  activeTabId: string;
+  tab: {
+    tabId: string;
+    name: string;
+    cwd: string;
+    repoRoot?: string;
+    inputKind: CliInput["kind"];
+    title: string;
+    sourceLabel: string;
+    experimentalFeatures?: ExperimentalFeature[];
+    selectedFile: SessionReviewFile | null;
+    selectedHunk: SessionReviewHunk | null;
+    showAgentNotes: boolean;
+    liveCommentCount: number;
+    reviewNoteCount?: number;
+    reviewNotes?: SessionReviewNoteSummary[];
+    files: SessionReviewFile[];
+  };
 }
 
 export type HunkSessionCommandResult =

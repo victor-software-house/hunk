@@ -6,6 +6,7 @@ import { testRender } from "@opentui/react/test-utils";
 import { act } from "react";
 import { SESSION_BROKER_REGISTRATION_VERSION } from "@hunk/session-broker-core";
 import type {
+  HunkReviewTabState,
   HunkSessionBrokerClient,
   HunkSessionRegistration,
   HunkSessionServerMessage,
@@ -74,19 +75,29 @@ function createMockHostClient({
   type Bridge = Parameters<HunkSessionBrokerClient["setBridge"]>[0];
 
   let bridge: Bridge = null;
-  let latestSnapshot: HunkSessionSnapshot["state"] | null = null;
+  let latestSnapshot: HunkReviewTabState | null = null;
+  const tabId = "tab-1";
   let registration: HunkSessionRegistration = {
     registrationVersion: SESSION_BROKER_REGISTRATION_VERSION,
     sessionId: "session-1",
     pid: process.pid,
     cwd,
-    repoRoot,
     launchedAt: "2026-03-24T00:00:00.000Z",
     info: {
-      inputKind: "vcs",
-      title: "repo working tree",
-      sourceLabel: "repo",
-      files: [],
+      activeTabId: tabId,
+      tabs: [
+        {
+          tabId,
+          name: "repo",
+          cwd,
+          repoRoot,
+          input: { kind: "vcs", staged: false, options: {} },
+          inputKind: "vcs",
+          title: "repo working tree",
+          sourceLabel: "repo",
+          files: [],
+        },
+      ],
     },
   };
   return {
@@ -99,7 +110,8 @@ function createMockHostClient({
         bridge = nextBridge;
       },
       updateSnapshot: (snapshot: HunkSessionSnapshot) => {
-        latestSnapshot = snapshot.state;
+        latestSnapshot =
+          snapshot.state.tabs.find((tab) => tab.tabId === snapshot.state.activeTabId) ?? null;
       },
     } as unknown as HunkSessionBrokerClient,
     dispatchCommand: async (message: HunkSessionServerMessage) => {
@@ -543,8 +555,8 @@ function firstCrossFileHunkNavigationHeader(frame: string) {
 
 async function waitForSnapshot(
   setup: Awaited<ReturnType<typeof testRender>>,
-  getSnapshot: () => HunkSessionSnapshot["state"] | null,
-  predicate: (snapshot: HunkSessionSnapshot["state"]) => boolean,
+  getSnapshot: () => HunkReviewTabState | null,
+  predicate: (snapshot: HunkReviewTabState) => boolean,
   attempts = 8,
 ) {
   let snapshot = getSnapshot();
@@ -1684,7 +1696,7 @@ describe("App interactions", () => {
       });
       await flush(setup);
 
-      expect(getLatestRegistration().info.experimentalFeatures).toEqual([]);
+      expect(getLatestRegistration().info.tabs[0]?.experimentalFeatures).toEqual([]);
       await expect(
         dispatchCommand({
           type: "command",

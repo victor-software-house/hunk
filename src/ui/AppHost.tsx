@@ -161,7 +161,8 @@ export function AppHost({
               createUnknownVcsNotice(sessionVcs.unknownVcsId, String(reloadInput.options.vcs)),
             ]
           : configured.startupNotices;
-      const nextSnapshot = createInitialSessionSnapshot(nextBootstrap);
+      const activeTabId = hostClient?.getRegistration().info.activeTabId ?? "local-tab";
+      const nextSnapshot = createInitialSessionSnapshot(nextBootstrap, activeTabId);
 
       let sessionId = "local-session";
       if (hostClient) {
@@ -208,14 +209,17 @@ export function AppHost({
         reason: options?.reason ?? "daemon",
       });
 
+      const nextTabState = nextSnapshot.state.tabs.find(
+        (tab) => tab.tabId === nextSnapshot.state.activeTabId,
+      );
       return {
         sessionId,
         inputKind: nextBootstrap.input.kind,
         title: nextBootstrap.changeset.title,
         sourceLabel: nextBootstrap.changeset.sourceLabel,
         fileCount: nextBootstrap.changeset.files.length,
-        selectedFilePath: nextSnapshot.state.selectedFilePath,
-        selectedHunkIndex: nextSnapshot.state.selectedHunkIndex,
+        selectedFilePath: nextTabState?.selectedFilePath,
+        selectedHunkIndex: nextTabState?.selectedHunkIndex ?? 0,
       };
     },
     [
