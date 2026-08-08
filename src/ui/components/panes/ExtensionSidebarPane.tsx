@@ -2,6 +2,7 @@ import { Component, useMemo, type ReactNode } from "react";
 import type {
   ExtensionDiffFile,
   ExtensionNotifyType,
+  ExtensionReviewControls,
   ExtensionSidebarActions,
   ExtensionSidebarKeybindings,
   ExtensionSidebarViewProps,
@@ -91,6 +92,7 @@ export function ExtensionSidebarPane({
   theme,
   width,
   keybindings,
+  review,
   notify,
   onSelectFile,
   onSelectHunk,
@@ -116,6 +118,7 @@ export function ExtensionSidebarPane({
   theme: AppTheme;
   width: number;
   keybindings: ExtensionSidebarKeybindings;
+  review: ExtensionReviewControls;
   notify: ExtensionNotifySink;
   onSelectFile: (fileId: string) => void;
   onSelectHunk: (fileId: string, hunkIndex: number) => void;
@@ -162,6 +165,7 @@ export function ExtensionSidebarPane({
     width,
     theme: publicTheme,
     keybindings,
+    review,
     actions,
   };
 

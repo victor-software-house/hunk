@@ -33,6 +33,7 @@ import {
   type ExtensionVcsWatchPlan,
   type HunkExtensionAPI,
 } from "../../../../extension-api/types";
+import { loadGitReviewHistory } from "./history";
 
 /**
  * Hunk's Git backend, as a bundled extension.
@@ -314,6 +315,7 @@ export const GitVcsAdapter = {
   name: "Git",
   detect: detectGitRepo,
   detectionPriority: HUNK_CORE_VCS_DETECTION_PRIORITY,
+  loadHistory: loadGitReviewHistory,
   operations: {
     "working-tree-diff": {
       async load(input, { cwd, gitExecutable = "git" }) {

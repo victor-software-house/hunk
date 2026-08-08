@@ -151,6 +151,16 @@ resolve reviewed file ids through the existing source fetcher, which retains
 ownership of caching and size limits. Missing or unreadable sources become
 `null`.
 
+`src/ui/lib/extensionReview.ts` owns the narrow `ctx.review` range policy. It
+exposes only whether the current input can express a VCS range, normalizes one
+non-empty range, and replaces that field while preserving the VCS input's
+pathspecs and options. `App` supplies the live action through its existing soft
+reload path, so extensions never receive raw `CliInput` or an unbounded reload
+callback; `AppHost` still enforces launch authority, filesystem bounds, config
+normalization, daemon registration, and lifecycle events. The same controls are
+passed to command handlers and sidebar props so visual navigators and commands
+share one reload contract.
+
 Writes are limited to reloadable working-tree reviews and reviewed paths inside
 the review root. App supplies the current input, unfiltered changeset, and root
 through refs so soft reloads update the policy inputs. The host verifies the
@@ -181,6 +191,11 @@ none — which is why the visible menu list is derived from the menus record
 (`buildMenuSpecs` in `src/ui/components/chrome/menu.ts`) rather than fixed.
 
 ## VCS adapters
+
+Review history is an optional adapter capability beside review operations. The
+public rows contain only bounded commit/ref identity and presentation metadata;
+`src/extensions/default/vcs/git/history.ts` is the bundled reference. Hunk never
+silently runs Git history for a session owned by another backend.
 
 `src/core/vcs/index.ts` is the single assembly point ordering bundled + user
 adapters by `detectionPriority` (Git is the baseline at 0; jj 200 / sl 100

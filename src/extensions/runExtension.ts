@@ -159,6 +159,7 @@ export function toInternalVcsAdapter(
   }
 
   const detect = adapter.detect;
+  const loadHistory = adapter.loadHistory;
   // Report once per adapter: detection runs on every session and reload, and a
   // repeated diagnostic for one authoring mistake is noise, not information.
   let reportedMismatch = false;
@@ -191,6 +192,15 @@ export function toInternalVcsAdapter(
       return { ...detected, id: adapter.id };
     },
     operations: internalOperations,
+    ...(loadHistory && {
+      async loadHistory(context) {
+        try {
+          return await loadHistory(context);
+        } catch (error) {
+          throw toUserFacingError(error);
+        }
+      },
+    }),
   };
 }
 

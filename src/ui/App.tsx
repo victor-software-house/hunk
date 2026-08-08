@@ -22,6 +22,7 @@ import type {
   UserNoteLineTarget,
 } from "../core/types";
 import { canReloadInput } from "../core/inputReload";
+import { getConfiguredVcsAdapter } from "../core/vcs";
 import { sanitizeTerminalLine } from "../lib/terminalText";
 import { resolveExtensionCommands, resolveExtensionFileViews } from "../extensions/apply";
 import {
@@ -35,7 +36,10 @@ import type {
   ExtensionEventContext,
   ExtensionFileSide,
   ExtensionNotifyType,
+  ExtensionReviewControls,
+  ExtensionReviewHistoryResult,
   ExtensionReviewNote,
+  ExtensionReviewRangeResult,
   ExtensionSidebarControls,
   ExtensionWorkspace,
   ExtensionWorkspaceWriteRequest,
@@ -79,6 +83,11 @@ import { buildExtensionAppCommands, extensionCommandKeyDefaults } from "./lib/ex
 import { createGuardedReviewNavigation } from "./lib/extensionNavigation";
 import type { LineCursor } from "./lib/lineCursors";
 import { buildExtensionReviewSelection } from "./lib/extensionSelection";
+import {
+  normalizeExtensionReviewRange,
+  resolveExtensionReviewRangeState,
+  withExtensionReviewRange,
+} from "./lib/extensionReview";
 import { useFilePresentationController } from "./fileViews/useFilePresentationController";
 import { useFilePresentationRendering } from "./fileViews/useFilePresentationRendering";
 import { createExtensionSidebarKeybindings, resolveCommandKeys } from "./lib/keymap";
@@ -608,6 +617,20 @@ export function App({
    */
   const reloadAfterWorkspaceWriteRef = useRef<() => void>(() => {});
 
+  /**
+   * Replace the current review range through the same late-bound reload path.
+   *
+   * Command contexts are created above the concrete callback so they receive a
+   * stable host capability rather than closing over one render's input.
+   */
+  const setExtensionReviewRangeRef = useRef<(range: string) => Promise<ExtensionReviewRangeResult>>(
+    async () => ({
+      ok: false,
+      reason: "unavailable",
+      detail: "The review range controls are not ready.",
+    }),
+  );
+
   const {
     accept: acceptExtensionDialog,
     cancel: cancelExtensionDialog,
@@ -722,6 +745,54 @@ export function App({
     [createExtensionDialogs],
   );
 
+  /** Build review-range controls from a current-state snapshot and a live reload action. */
+  const createReviewControls = useCallback(
+    (): ExtensionReviewControls =>
+      Object.freeze({
+        range: resolveExtensionReviewRangeState(bootstrap.input),
+        setRange(range: string) {
+          return setExtensionReviewRangeRef.current(range);
+        },
+        async loadHistory(): Promise<ExtensionReviewHistoryResult> {
+          if (bootstrap.input.kind !== "vcs") {
+            return {
+              ok: false,
+              reason: "unavailable",
+              detail: "Review history is available only for VCS diff sessions.",
+            };
+          }
+
+          const adapter = getConfiguredVcsAdapter(
+            bootstrap.input.options.vcs,
+            bootstrap.reloadContext.vcsAdapters,
+          );
+          if (!adapter.loadHistory) {
+            return {
+              ok: false,
+              reason: "unavailable",
+              detail: `${adapter.name} does not provide review history.`,
+            };
+          }
+
+          try {
+            const history = await adapter.loadHistory({
+              cwd: bootstrap.reloadContext.repoRoot ?? bootstrap.reloadContext.cwd,
+            });
+            return { ok: true, history };
+          } catch (error) {
+            return {
+              ok: false,
+              reason: "failed",
+              detail: `Failed to load ${adapter.name} history • ${
+                error instanceof Error ? error.message || error.name : String(error)
+              }`,
+            };
+          }
+        },
+      }),
+    [bootstrap.input, bootstrap.reloadContext],
+  );
+
   // Lifecycle and bus listeners receive the same sidebar controls as commands,
   // so an extension can react to loaded content by revealing its own pane.
   if (extensions) {
@@ -751,6 +822,7 @@ export function App({
         cwd: extensions?.context.cwd ?? process.cwd(),
         notify: (message, type) => extensions?.context.notify(message, type),
         sidebars: createSidebarControls(registered.extensionId),
+        review: createReviewControls(),
         fileViews: createFileViewControls(registered.extensionId),
         // Snapshot semantics: built when the key fires, so the handler sees
         // where the review was at that moment, even if it awaits and the user
@@ -796,6 +868,7 @@ export function App({
     [
       createExtensionDialogs,
       createFileViewControls,
+      createReviewControls,
       createSidebarControls,
       createWorkspaceControls,
       extensions,
@@ -1321,6 +1394,71 @@ export function App({
       console.error("Failed to reload the current diff.", error);
     });
   }, [refreshCurrentInput]);
+
+  /** Replace one extension-requested VCS range while preserving the active Hunk view. */
+  const setExtensionReviewRange = useCallback(
+    async (requestedRange: string): Promise<ExtensionReviewRangeResult> => {
+      const range = normalizeExtensionReviewRange(requestedRange);
+      if (!appAliveForNavigationRef.current) {
+        return {
+          ok: false,
+          reason: "unavailable",
+          detail: "The review session was reloaded before the range could be changed.",
+        };
+      }
+
+      const state = resolveExtensionReviewRangeState(bootstrap.input);
+      if (!state.available || bootstrap.input.kind !== "vcs") {
+        return {
+          ok: false,
+          reason: "unavailable",
+          detail: state.available
+            ? "Review ranges are available only for VCS diff sessions."
+            : state.detail,
+        };
+      }
+
+      const nextInput = withCurrentViewOptions(withExtensionReviewRange(bootstrap.input, range), {
+        layoutMode,
+        themeId,
+        showAgentNotes,
+        showHunkHeaders,
+        showLineNumbers,
+        showMenuBar,
+        wrapLines,
+      });
+
+      try {
+        await onReloadSession(nextInput, {
+          reason: "manual",
+          resetApp: false,
+          sourcePath: bootstrap.changeset.sourceLabel,
+        });
+        return { ok: true };
+      } catch (error) {
+        return {
+          ok: false,
+          reason: "failed",
+          detail: `Failed to load review range ${range} • ${
+            error instanceof Error ? error.message || error.name : String(error)
+          }`,
+        };
+      }
+    },
+    [
+      bootstrap.changeset.sourceLabel,
+      bootstrap.input,
+      layoutMode,
+      onReloadSession,
+      showAgentNotes,
+      showHunkHeaders,
+      showLineNumbers,
+      showMenuBar,
+      themeId,
+      wrapLines,
+    ],
+  );
+  setExtensionReviewRangeRef.current = setExtensionReviewRange;
 
   // A completed extension write is a source change the user did not make in an
   // editor, so it reloads through exactly the path the refresh key takes.
@@ -1874,6 +2012,7 @@ export function App({
         theme={activeTheme}
         width={pane.width}
         keybindings={sidebarKeybindings}
+        review={createReviewControls()}
         notify={(message, type) => extensions?.context.notify(message, type)}
         onSelectFile={(fileId) => {
           focusFiles();
