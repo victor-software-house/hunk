@@ -17,7 +17,7 @@ import {
  * Hunk's Jujutsu backend, as a bundled extension.
  *
  * This file is written the way a third-party VCS extension would be: it sees
- * only the published `hunkdiff/extension` contract plus its own implementation
+ * only the published `@victor-software-house/hunk/extension` contract plus its own implementation
  * helpers in `src/core/vcs/jujutsu.ts`. If something here cannot be said in those types,
  * the contract is missing something.
  */

@@ -6,7 +6,7 @@ import type {
   ExtensionFileViewSourceRange,
   ExtensionFileViewSpan,
   ExtensionFactory,
-} from "hunkdiff/extension";
+} from "@victor-software-house/hunk/extension";
 
 /** Build one stateful painter as a closure over hunk semantics, not host payload. */
 function hunkCard(

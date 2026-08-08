@@ -3,18 +3,22 @@ title: OpenTUI components
 description: Embed Hunk's Pierre-backed diff renderer in an OpenTUI React application.
 ---
 
-The `hunkdiff/opentui` export exposes Hunk's renderer without the CLI shell, global keybindings, session broker, or menus.
+The `@victor-software-house/hunk/opentui` export exposes Hunk's renderer without the CLI shell, global keybindings, session broker, or menus.
 
 ## Install peers
 
 ```bash
-npm install hunkdiff @opentui/core@^0.4.3 @opentui/react@^0.4.3 react
+bun add @victor-software-house/hunk @opentui/core@^0.4.3 @opentui/react@^0.4.3 react
 ```
 
 ## Render one file
 
 ```tsx
-import { HunkDiffView, createHunkDiffFile, parseDiffFromFile } from "hunkdiff/opentui";
+import {
+  HunkDiffView,
+  createHunkDiffFile,
+  parseDiffFromFile,
+} from "@victor-software-house/hunk/opentui";
 
 const metadata = parseDiffFromFile(
   { cacheKey: "before", contents: "export const n = 1;\n", name: "value.ts" },
