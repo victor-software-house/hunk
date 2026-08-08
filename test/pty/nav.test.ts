@@ -96,6 +96,7 @@ describe("PTY navigation", () => {
       await session.waitForText(/View\s+Navigate\s+Agent\s+Help/, {
         timeout: 15_000,
       });
+      await harness.ensureKeyboardIsLive(session);
 
       // The fixture has 18 long-file hunks followed by two short-file hunks.
       // Navigate by that semantic count: the larger tabbed viewport can render
