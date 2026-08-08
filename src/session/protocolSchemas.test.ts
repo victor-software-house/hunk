@@ -38,6 +38,16 @@ describe("session daemon request validation", () => {
         nextInput: { kind: "show", ref: "HEAD~1", options: {} },
       },
       {
+        action: "tab-add",
+        selector: { sessionId: "s-1" },
+        name: "api",
+        sourcePath: "/api",
+        input: { kind: "vcs", range: "main...feature", staged: false, options: {} },
+      },
+      { action: "tab-select", selector: { sessionId: "s-1" }, tab: "api" },
+      { action: "tab-rename", selector: { sessionId: "s-1" }, tab: "api", name: "backend" },
+      { action: "tab-close", selector: { sessionId: "s-1" }, tab: "api" },
+      {
         action: "comment-add",
         selector: { sessionId: "s-1" },
         filePath: "a.ts",
@@ -106,5 +116,14 @@ describe("session daemon request validation", () => {
     expect(() =>
       parseSessionDaemonRequest({ action: "reload", selector: { sessionId: "s-1" } }),
     ).toThrow(/nextInput/);
+    expect(() =>
+      parseSessionDaemonRequest({
+        action: "tab-add",
+        selector: { sessionId: "s-1" },
+        name: "api",
+        sourcePath: "/api",
+        input: { kind: "vcs", staged: "no", options: {} },
+      }),
+    ).toThrow(/input/);
   });
 });

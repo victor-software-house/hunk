@@ -195,6 +195,7 @@ const NOOP_TOGGLE_GAP = () => {};
 
 /** Render the main multi-file review stream. */
 export function DiffPane({
+  active = true,
   codeHorizontalOffset = 0,
   diffContentWidth,
   expandedGapsByFileId = EMPTY_EXPANDED_GAPS_BY_FILE_ID,
@@ -250,6 +251,7 @@ export function DiffPane({
   onViewportCenteredHunkChange,
   onViewportLineCursorChange,
 }: {
+  active?: boolean;
   codeHorizontalOffset?: number;
   diffContentWidth: number;
   expandedGapsByFileId?: Record<string, ReadonlySet<string>>;
@@ -635,6 +637,9 @@ export function DiffPane({
   // Mirror the imperative OpenTUI scrollbox state into React state so geometry planning,
   // windowing, pinned-header ownership, and prefetching can all read the same viewport snapshot.
   useEffect(() => {
+    if (!active) {
+      return;
+    }
     const scrollBox = scrollRef.current;
     if (!scrollBox) {
       return;
@@ -708,12 +713,16 @@ export function DiffPane({
     };
 
     readViewport();
+    // A selected tab expands from 0×0 in the same commit. Re-read after that layout even when
+    // OpenTUI coalesces away the hidden-to-visible resize event.
+    const activationViewportRead = setTimeout(readViewport, 0);
     scrollBox.verticalScrollBar.on("change", handleViewportChange);
     scrollBox.viewport.on("layout-changed", handleViewportChange);
     scrollBox.viewport.on("resized", handleViewportChange);
 
     return () => {
       cancelled = true;
+      clearTimeout(activationViewportRead);
       if (scheduledViewportRead) {
         clearTimeout(scheduledViewportRead);
       }
@@ -721,7 +730,14 @@ export function DiffPane({
       scrollBox.viewport.off("layout-changed", handleViewportChange);
       scrollBox.viewport.off("resized", handleViewportChange);
     };
-  }, [activateRapidScrollOverscan, clearAddNoteHoverForScroll, files.length, scrollRef, wrapLines]);
+  }, [
+    active,
+    activateRapidScrollOverscan,
+    clearAddNoteHoverForScroll,
+    files.length,
+    scrollRef,
+    wrapLines,
+  ]);
 
   const sectionHeaderHeights = useMemo(() => buildInStreamFileHeaderHeights(files), [files]);
   const reserveAddNoteColumn = Boolean(onStartUserNoteAtHunk);
@@ -2120,6 +2136,7 @@ export function DiffPane({
                         file.id === renderedLineCursor?.fileId ? cursorHighlight : undefined
                       }
                       shouldLoadHighlight={
+                        active &&
                         (!wrapLines || initialWrappedRenderWindowWarmed) &&
                         highlightPrefetchFileIds.has(file.id)
                       }

@@ -1,7 +1,10 @@
 import { SESSION_BROKER_REGISTRATION_VERSION } from "@hunk/session-broker-core";
 import type {
+  HunkReviewTabInfo,
+  HunkReviewTabState,
   HunkSessionRegistration,
   HunkSessionSnapshot,
+  ListedReviewTab,
   ListedSession,
   SelectedSessionContext,
   SessionFileSummary,
@@ -10,6 +13,8 @@ import type {
   SessionReviewFile,
   SessionReviewHunk,
 } from "../../src/session/types";
+
+export const TEST_REVIEW_TAB_ID = "tab-1";
 
 export function createTestSessionFileSummary(
   overrides: Partial<SessionFileSummary> = {},
@@ -52,83 +57,116 @@ function summarizeReviewFile(reviewFile: SessionReviewFile): SessionFileSummary 
   return summary;
 }
 
-export function createTestSessionSnapshot(
-  overrides: Partial<HunkSessionSnapshot["state"]> & { updatedAt?: string } = {},
-): HunkSessionSnapshot {
-  const { updatedAt = "2026-03-22T00:00:00.000Z", ...stateOverrides } = overrides;
+export function createTestReviewTabState(
+  overrides: Partial<HunkReviewTabState> = {},
+): HunkReviewTabState {
+  return {
+    tabId: TEST_REVIEW_TAB_ID,
+    selectedFileId: "file-1",
+    selectedFilePath: "src/example.ts",
+    selectedHunkIndex: 0,
+    showAgentNotes: false,
+    liveCommentCount: 0,
+    liveComments: [],
+    ...overrides,
+  };
+}
 
+export function createTestSessionSnapshot({
+  updatedAt = "2026-03-22T00:00:00.000Z",
+  activeTabId = TEST_REVIEW_TAB_ID,
+  tabs,
+  ...activeTabOverrides
+}: Partial<HunkReviewTabState> & {
+  updatedAt?: string;
+  activeTabId?: string;
+  tabs?: HunkReviewTabState[];
+} = {}): HunkSessionSnapshot {
   return {
     updatedAt,
     state: {
-      selectedFileId: "file-1",
-      selectedFilePath: "src/example.ts",
-      selectedHunkIndex: 0,
-      showAgentNotes: false,
-      liveCommentCount: 0,
-      liveComments: [],
-      ...stateOverrides,
+      activeTabId,
+      tabs: tabs ?? [createTestReviewTabState({ tabId: activeTabId, ...activeTabOverrides })],
     },
   };
 }
 
+export function createTestReviewTabInfo(
+  overrides: Partial<HunkReviewTabInfo> = {},
+): HunkReviewTabInfo {
+  return {
+    tabId: TEST_REVIEW_TAB_ID,
+    name: "repo",
+    cwd: "/repo",
+    repoRoot: "/repo",
+    input: { kind: "vcs", staged: false, options: {} },
+    inputKind: "vcs",
+    title: "repo working tree",
+    sourceLabel: "/repo",
+    experimentalFeatures: [],
+    files: [createTestSessionReviewFile()],
+    ...overrides,
+  };
+}
+
 export function createTestSessionRegistration(
-  overrides: Partial<HunkSessionRegistration> &
-    Partial<
-      Pick<
-        HunkSessionRegistration["info"],
-        "inputKind" | "title" | "sourceLabel" | "experimentalFeatures" | "files"
-      >
-    > & {
-      info?: Partial<HunkSessionRegistration["info"]>;
-    } = {},
+  overrides: Partial<HunkSessionRegistration> & {
+    activeTabId?: string;
+    tabs?: HunkReviewTabInfo[];
+    activeTab?: Partial<HunkReviewTabInfo>;
+  } = {},
 ): HunkSessionRegistration {
   const {
-    inputKind,
-    title,
-    sourceLabel,
-    experimentalFeatures,
-    files,
+    activeTabId = TEST_REVIEW_TAB_ID,
+    tabs,
+    activeTab,
     info: infoOverrides,
     ...registrationOverrides
   } = overrides;
-  const resolvedFiles = files ?? infoOverrides?.files ?? [createTestSessionReviewFile()];
+  const resolvedTabs = tabs ?? [createTestReviewTabInfo({ tabId: activeTabId, ...activeTab })];
 
   return {
     registrationVersion: SESSION_BROKER_REGISTRATION_VERSION,
     sessionId: "session-1",
     pid: 123,
     cwd: "/repo",
-    repoRoot: "/repo",
     launchedAt: "2026-03-22T00:00:00.000Z",
     ...registrationOverrides,
     info: {
-      inputKind: inputKind ?? infoOverrides?.inputKind ?? "vcs",
-      title: title ?? infoOverrides?.title ?? "repo working tree",
-      sourceLabel: sourceLabel ?? infoOverrides?.sourceLabel ?? "/repo",
-      experimentalFeatures: experimentalFeatures ?? infoOverrides?.experimentalFeatures ?? [],
-      files: resolvedFiles,
+      activeTabId: infoOverrides?.activeTabId ?? activeTabId,
+      tabs: infoOverrides?.tabs ?? resolvedTabs,
     },
   };
 }
 
-export function createTestListedSession(overrides: Partial<ListedSession> = {}): ListedSession {
-  const files = overrides.files ?? [createTestSessionFileSummary()];
-  const snapshot = overrides.snapshot ?? createTestSessionSnapshot();
+export function createTestListedReviewTab(
+  overrides: Partial<ListedReviewTab> = {},
+): ListedReviewTab {
+  const info = createTestReviewTabInfo();
+  return {
+    ...info,
+    files: info.files.map(summarizeReviewFile),
+    state: createTestReviewTabState(),
+    ...overrides,
+  };
+}
 
+export function createTestListedSession(overrides: Partial<ListedSession> = {}): ListedSession {
+  const activeTabId = overrides.activeTabId ?? TEST_REVIEW_TAB_ID;
   return {
     sessionId: "session-1",
     pid: 123,
     cwd: "/repo",
-    repoRoot: "/repo",
     launchedAt: "2026-03-22T00:00:00.000Z",
-    inputKind: "vcs",
-    title: "repo working tree",
-    sourceLabel: "/repo",
-    experimentalFeatures: [],
+    activeTabId,
+    tabs: [
+      createTestListedReviewTab({
+        tabId: activeTabId,
+        state: createTestReviewTabState({ tabId: activeTabId }),
+      }),
+    ],
+    snapshot: { updatedAt: "2026-03-22T00:00:00.000Z" },
     ...overrides,
-    fileCount: overrides.fileCount ?? files.length,
-    files,
-    snapshot,
   };
 }
 
@@ -148,53 +186,63 @@ export function createTestSessionLiveComment(
 }
 
 export function createTestSelectedSessionContext(
-  overrides: Partial<SelectedSessionContext> = {},
+  overrides: Omit<Partial<SelectedSessionContext>, "tab"> & {
+    tab?: Partial<SelectedSessionContext["tab"]>;
+  } = {},
 ): SelectedSessionContext {
   return {
     sessionId: "session-1",
-    title: "repo diff",
-    sourceLabel: "/repo",
-    repoRoot: "/repo",
-    inputKind: "diff",
-    experimentalFeatures: [],
-    selectedFile: createTestSessionFileSummary({
-      additions: 1,
-      deletions: 0,
-      path: "README.md",
-    }),
-    selectedHunk: {
-      index: 0,
-      oldRange: [1, 1],
-      newRange: [1, 2],
-    },
-    showAgentNotes: false,
-    liveCommentCount: 0,
+    activeTabId: TEST_REVIEW_TAB_ID,
     ...overrides,
+    tab: {
+      tabId: TEST_REVIEW_TAB_ID,
+      name: "repo",
+      cwd: "/repo",
+      repoRoot: "/repo",
+      inputKind: "diff",
+      title: "repo diff",
+      sourceLabel: "/repo",
+      experimentalFeatures: [],
+      selectedFile: createTestSessionFileSummary({ additions: 1, deletions: 0, path: "README.md" }),
+      selectedHunk: { index: 0, oldRange: [1, 1], newRange: [1, 2] },
+      showAgentNotes: false,
+      liveCommentCount: 0,
+      ...overrides.tab,
+    },
   };
 }
 
-export function createTestSessionReview(overrides: Partial<SessionReview> = {}): SessionReview {
-  const files = overrides.files ?? [createTestSessionReviewFile()];
+export function createTestSessionReview(
+  overrides: Omit<Partial<SessionReview>, "tab"> & { tab?: Partial<SessionReview["tab"]> } = {},
+): SessionReview {
+  const files = overrides.tab?.files ?? [createTestSessionReviewFile()];
   const selectedFile =
-    overrides.selectedFile === undefined ? (files[0] ?? null) : overrides.selectedFile;
+    overrides.tab?.selectedFile === undefined ? (files[0] ?? null) : overrides.tab.selectedFile;
   const selectedHunk =
-    overrides.selectedHunk === undefined
+    overrides.tab?.selectedHunk === undefined
       ? (selectedFile?.hunks[0] ?? null)
-      : overrides.selectedHunk;
+      : overrides.tab.selectedHunk;
 
   return {
     sessionId: "session-1",
-    title: "repo working tree",
-    sourceLabel: "/repo",
-    repoRoot: "/repo",
-    inputKind: "vcs",
-    experimentalFeatures: [],
-    showAgentNotes: false,
-    liveCommentCount: 0,
+    activeTabId: TEST_REVIEW_TAB_ID,
     ...overrides,
-    selectedFile,
-    selectedHunk,
-    files,
+    tab: {
+      tabId: TEST_REVIEW_TAB_ID,
+      name: "repo",
+      cwd: "/repo",
+      repoRoot: "/repo",
+      inputKind: "vcs",
+      title: "repo working tree",
+      sourceLabel: "/repo",
+      experimentalFeatures: [],
+      showAgentNotes: false,
+      liveCommentCount: 0,
+      ...overrides.tab,
+      selectedFile,
+      selectedHunk,
+      files,
+    },
   };
 }
 
@@ -203,8 +251,7 @@ export function createTestListedSessionFromReviewFiles(
   overrides: Partial<ListedSession> = {},
 ): ListedSession {
   return createTestListedSession({
-    fileCount: files.length,
-    files: files.map(summarizeReviewFile),
+    tabs: [createTestListedReviewTab({ files: files.map(summarizeReviewFile) })],
     ...overrides,
   });
 }

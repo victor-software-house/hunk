@@ -25,6 +25,20 @@ function createTestBrokerSession(sessionId: string) {
   };
 }
 
+const testSelectionAdapter = {
+  matchesSession: (
+    session: ReturnType<typeof createTestBrokerSession>,
+    selector: { sessionId?: string; sessionPath?: string; repoRoot?: string },
+  ) =>
+    selector.sessionId
+      ? session.sessionId === selector.sessionId
+      : selector.sessionPath
+        ? session.cwd === selector.sessionPath
+        : session.repoRoot === selector.repoRoot,
+  describeSession: (session: ReturnType<typeof createTestBrokerSession>) =>
+    `${session.sessionId} (${session.title})`,
+};
+
 /** Capture the message a callback throws so broker errors can be prefix-checked. */
 function thrownMessage(callback: () => unknown) {
   try {
@@ -59,8 +73,12 @@ describe("agent error messages", () => {
     const realMessages = [
       noDiffFileMatchesMessage("src/App.tsx"),
       NO_ACTIVE_SESSIONS_MESSAGE,
-      thrownMessage(() => resolveSessionTarget(sessions, { repoRoot: "/tmp/shared-repo" })),
-      thrownMessage(() => resolveSessionTarget(sessions, { sessionPath: "/tmp/missing" })),
+      thrownMessage(() =>
+        resolveSessionTarget(sessions, { repoRoot: "/tmp/shared-repo" }, testSelectionAdapter),
+      ),
+      thrownMessage(() =>
+        resolveSessionTarget(sessions, { sessionPath: "/tmp/missing" }, testSelectionAdapter),
+      ),
       RELOAD_SEPARATOR_MESSAGE,
       COMMENT_APPLY_STDIN_MESSAGE,
       constraintViolationMessage(NAVIGATE_TARGET_CONSTRAINT),
