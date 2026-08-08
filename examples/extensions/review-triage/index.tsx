@@ -5,7 +5,7 @@ import type {
   ExtensionReviewNote,
   ExtensionSidebarViewProps,
   HunkExtensionAPI,
-} from "hunkdiff/extension";
+} from "@victor-software-house/hunk/extension";
 
 type TriageStatus = "approved" | "investigate" | "blocked";
 

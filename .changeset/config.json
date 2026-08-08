@@ -1,16 +1,16 @@
 {
   "$schema": "https://unpkg.com/@changesets/config@3.1.4/schema.json",
   "changelog": [
-    "@changesets/changelog-github",
+    "./changelog.ts",
     {
-      "repo": "modem-dev/hunk",
+      "repo": "victor-software-house/hunk",
       "disableThanks": true
     }
   ],
   "commit": false,
   "fixed": [],
   "linked": [],
-  "access": "public",
+  "access": "restricted",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
   "ignore": [
