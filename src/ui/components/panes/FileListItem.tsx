@@ -41,12 +41,15 @@ export function FileGroupHeader({
   paddingLeft = 1,
   textWidth,
   theme,
+  onToggle,
 }: {
   entry: FileGroupEntry;
   paddingLeft?: number;
   textWidth: number;
   theme: ExtensionSidebarTheme;
+  onToggle?: (path: string) => void;
 }) {
+  const indicator = onToggle ? (entry.collapsed ? "▸ " : "▾ ") : "";
   return (
     <box
       style={{
@@ -55,8 +58,9 @@ export function FileGroupHeader({
         paddingLeft,
         backgroundColor: theme.panel,
       }}
+      onMouseUp={() => entry.path && onToggle?.(entry.path)}
     >
-      <text fg={theme.muted}>{fitText(entry.label, Math.max(1, textWidth))}</text>
+      <text fg={theme.muted}>{fitText(`${indicator}${entry.label}`, Math.max(1, textWidth))}</text>
     </box>
   );
 }
@@ -83,7 +87,9 @@ export const FileListItem = memo(function FileListItem({
   const stats = sidebarEntryStats(entry);
   const { icon, color } = getFileStateIcon(entry, theme);
   const iconWidth = icon ? 2 : 0; // icon + space
-  const statsSectionWidth = statsWidth > 0 ? statsWidth + 1 : 0;
+  const maximumStatsWidth = Math.max(0, textWidth - 1 - iconWidth - 8);
+  const visibleStatsWidth = Math.min(statsWidth, maximumStatsWidth);
+  const statsSectionWidth = visibleStatsWidth > 0 ? visibleStatsWidth + 1 : 0;
   const nameWidth = Math.max(1, textWidth - 1 - iconWidth - statsSectionWidth);
 
   return (
