@@ -137,16 +137,17 @@ describe("registerHostRuntimeModules", () => {
     ).toBe(mod.default.Row);
   });
 
-  test("serves hunkdiff/extension runtime values", async () => {
-    const path = writeTempExtension(
-      "ext.ts",
-      `import { HunkExtensionUserError } from "hunkdiff/extension";\n` +
-        `export default { HunkExtensionUserError };\n`,
-    );
+  test("serves scoped and upstream-compatible extension runtime values", async () => {
+    for (const specifier of ["@victor-software-house/hunk/extension", "hunkdiff/extension"]) {
+      const path = writeTempExtension(
+        `${specifier.startsWith("@") ? "scoped" : "upstream"}.ts`,
+        `import { HunkExtensionUserError } from ${JSON.stringify(specifier)};\n` +
+          `export default { HunkExtensionUserError };\n`,
+      );
 
-    const mod = await importTempExtension(path);
-
-    expect(mod.default.HunkExtensionUserError).toBe(HunkExtensionUserError);
+      const mod = await importTempExtension(path);
+      expect(mod.default.HunkExtensionUserError).toBe(HunkExtensionUserError);
+    }
   });
 
   test("reaches helper modules imported by the entry file", async () => {

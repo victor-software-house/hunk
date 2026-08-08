@@ -46,12 +46,24 @@ export function isGeneratedPrereleasePreparation(changedPaths: readonly string[]
   );
 }
 
-/** Return the highest stable release heading carried in the generated changelog. */
-function findLatestStableRelease(changelog: string) {
-  const versions = [...changelog.matchAll(/^## (\d+)\.(\d+)\.(\d+)$/gm)].map((match) => ({
-    raw: match[0].slice(3),
-    parts: [Number(match[1]), Number(match[2]), Number(match[3])],
-  }));
+/** Return the highest stable release heading older than the package prerelease core. */
+function findLatestPriorStableRelease(changelog: string, packageVersion: string) {
+  const prerelease = packageVersion.match(/^(\d+)\.(\d+)\.(\d+)-/);
+  if (!prerelease) return undefined;
+  const prereleaseCore = [Number(prerelease[1]), Number(prerelease[2]), Number(prerelease[3])];
+  const versions = [...changelog.matchAll(/^## (\d+)\.(\d+)\.(\d+)$/gm)]
+    .map((match) => ({
+      raw: match[0].slice(3),
+      parts: [Number(match[1]), Number(match[2]), Number(match[3])],
+    }))
+    .filter(({ parts }) => {
+      for (let index = 0; index < 3; index += 1) {
+        if (parts[index]! !== prereleaseCore[index]!) {
+          return parts[index]! < prereleaseCore[index]!;
+        }
+      }
+      return false;
+    });
   versions.sort((left, right) => {
     for (let index = 0; index < 3; index += 1) {
       const difference = right.parts[index]! - left.parts[index]!;
@@ -81,13 +93,13 @@ export function validateGeneratedPrerelease(input: GeneratedPrereleaseInput) {
   if (typeof initialVersion !== "string" || !/^\d+\.\d+\.\d+$/.test(initialVersion)) {
     throw new Error(`Missing stable initial version for package ${packageJson.name}`);
   }
-  const latestStableRelease = findLatestStableRelease(changelog);
+  const latestStableRelease = findLatestPriorStableRelease(changelog, packageJson.version);
   if (!latestStableRelease) {
-    throw new Error("Changelog does not contain a stable release heading");
+    throw new Error("Changelog does not contain a stable release before the prerelease line");
   }
   if (initialVersion !== latestStableRelease) {
     throw new Error(
-      `Initial version ${initialVersion} does not match latest stable release ${latestStableRelease}`,
+      `Initial version ${initialVersion} does not match latest prior stable release ${latestStableRelease}`,
     );
   }
 
