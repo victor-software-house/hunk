@@ -1,6 +1,6 @@
 # OpenTUI component
 
-`hunkdiff/opentui` exports reusable terminal diff components built from the same renderer as the Hunk CLI.
+`@victor-software-house/hunk/opentui` exports reusable terminal diff components built from the same renderer as the Hunk CLI.
 
 Use `HunkDiffView` when you want a batteries-included single-file diff, or compose the lower-level primitives when you want to build your own Hunk-like review UI without Hunk's sidebar, menus, global keyboard shortcuts, or session behavior.
 
@@ -17,7 +17,11 @@ npm i hunkdiff @opentui/core@^0.4.2 @opentui/react@^0.4.2 react
 ```tsx
 import { createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react";
-import { HunkDiffView, createHunkDiffFile, parseDiffFromFile } from "hunkdiff/opentui";
+import {
+  HunkDiffView,
+  createHunkDiffFile,
+  parseDiffFromFile,
+} from "@victor-software-house/hunk/opentui";
 
 const metadata = parseDiffFromFile(
   {
@@ -153,7 +157,7 @@ type HunkDiffFile = Omit<HunkDiffFileInput, "stats"> & {
 Components accept `HunkDiffFileInput` directly. Use `createHunkDiffFile(...)` when you want a normalized `HunkDiffFile` with paths and stats filled in once:
 
 ```tsx
-import { createHunkDiffFile, parseDiffFromFile } from "hunkdiff/opentui";
+import { createHunkDiffFile, parseDiffFromFile } from "@victor-software-house/hunk/opentui";
 
 const file = createHunkDiffFile({
   id: "example",
@@ -168,7 +172,7 @@ const file = createHunkDiffFile({
 Use `parseDiffFromFile(...)` when you already have the old and new file contents.
 
 ```tsx
-import { createHunkDiffFile, parseDiffFromFile } from "hunkdiff/opentui";
+import { createHunkDiffFile, parseDiffFromFile } from "@victor-software-house/hunk/opentui";
 
 const file = createHunkDiffFile({
   id: "example",
@@ -181,7 +185,7 @@ const file = createHunkDiffFile({
 Use `createHunkDiffFilesFromPatch(...)` for a quick multi-file patch path:
 
 ```tsx
-import { createHunkDiffFilesFromPatch } from "hunkdiff/opentui";
+import { createHunkDiffFilesFromPatch } from "@victor-software-house/hunk/opentui";
 
 const files = createHunkDiffFilesFromPatch(patchText, "example:patch");
 ```
@@ -229,4 +233,4 @@ If you need direct access to Pierre's parser, `parsePatchFiles(...)` is still re
 - Runnable demo overview: [`examples/README.md`](../examples/README.md)
 - Component demos: [`examples/7-opentui-component/README.md`](../examples/7-opentui-component/README.md)
 
-The in-repo demos import from `../../src/opentui` so they run from source. Published consumers should import from `hunkdiff/opentui`.
+The in-repo demos import from `../../src/opentui` so they run from source. Published consumers should import from `@victor-software-house/hunk/opentui`.
