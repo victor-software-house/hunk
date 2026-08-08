@@ -192,6 +192,28 @@ export function sortPlatformPackageSpecs(specs: readonly PlatformPackageSpec[]) 
   return [...specs].sort((left, right) => left.packageName.localeCompare(right.packageName));
 }
 
+/** Build Bun publish arguments with the repository-level registry authentication config. */
+export function buildPublishArgs(options: {
+  bunConfigPath: string;
+  dryRun: boolean;
+  npmTag: string;
+}) {
+  const args = [
+    "--config",
+    options.bunConfigPath,
+    "publish",
+    "--tolerate-republish",
+    "--access",
+    "restricted",
+    "--tag",
+    options.npmTag,
+  ];
+  if (options.dryRun) {
+    args.push("--dry-run");
+  }
+  return args;
+}
+
 /** Require a package-set retry to see either no versions or the complete set. */
 export function classifyPackageSetPublication(
   packages: readonly { name: string; version: string; exists: boolean }[],
