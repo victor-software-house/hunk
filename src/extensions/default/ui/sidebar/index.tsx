@@ -2,11 +2,7 @@ import type { ScrollBoxRenderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ExtensionSidebarViewProps } from "../../../../extension-api/types";
-import {
-  buildSidebarEntries,
-  sidebarEntryStatsWidth,
-  type SidebarEntry,
-} from "../../../../ui/lib/files";
+import { sidebarEntryStatsWidth } from "../../../../ui/lib/files";
 import { fileRowId } from "../../../../ui/lib/ids";
 import { buildSidebarRenderWindow } from "../../../../ui/lib/sidebarRenderWindow";
 import { FileGroupHeader, FileListItem } from "../../../../ui/components/panes/FileListItem";
@@ -18,6 +14,7 @@ import {
   type ExtensionLoadIssue,
   type RegisteredSidebarView,
 } from "../../../types";
+import { buildSidebarFileTree } from "../../../../ui/lib/sidebarFileTree";
 
 /**
  * Hunk's file-navigation sidebar, shipped as a bundled extension.
@@ -68,10 +65,12 @@ export function BuiltInSidebarView({
 }: ExtensionSidebarViewProps): ReactNode {
   const scrollRef = useRef<ScrollBoxRenderable | null>(null);
   const [scrollViewport, setScrollViewport] = useState({ top: 0, height: 0 });
+  const [collapsedPaths, setCollapsedPaths] = useState<ReadonlySet<string>>(() => new Set());
   const terminal = useTerminalDimensions();
   // Mirrors the host layout: one column of row highlight plus row padding.
   const textWidth = Math.max(8, width - 2);
-  const entries = useMemo<SidebarEntry[]>(() => buildSidebarEntries(files), [files]);
+  const tree = useMemo(() => buildSidebarFileTree(files, collapsedPaths), [collapsedPaths, files]);
+  const entries = tree.entries;
   const fileEntries = entries.filter((entry) => entry.kind === "file");
   const statsWidth = Math.max(0, ...fileEntries.map((entry) => sidebarEntryStatsWidth(entry)));
   const renderWindow = useMemo(
@@ -138,6 +137,27 @@ export function BuiltInSidebarView({
     };
   }, [entries.length]);
 
+  // A selected file is never allowed to remain hidden under a collapsed ancestor.
+  useEffect(() => {
+    if (!selectedFileId) return;
+    const ancestors = tree.ancestorsByFileId.get(selectedFileId);
+    if (!ancestors?.some((path) => collapsedPaths.has(path))) return;
+    setCollapsedPaths((current) => {
+      const next = new Set(current);
+      for (const path of ancestors) next.delete(path);
+      return next;
+    });
+  }, [collapsedPaths, selectedFileId, tree.ancestorsByFileId]);
+
+  const toggleDirectory = (path: string) => {
+    setCollapsedPaths((current) => {
+      const next = new Set(current);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  };
+
   // Keep the selected file's row visible as navigation moves the selection —
   // behavior the sidebar owns, so every sidebar (custom ones included) decides
   // its own follow policy instead of the host scrolling a pane it cannot see.
@@ -176,15 +196,24 @@ export function BuiltInSidebarView({
           }
 
           const { entry } = item;
+          const depth = entry.depth ?? 0;
           return entry.kind === "group" ? (
-            <FileGroupHeader key={entry.id} entry={entry} textWidth={textWidth} theme={theme} />
+            <FileGroupHeader
+              key={entry.id}
+              entry={entry}
+              paddingLeft={1 + depth * 2}
+              textWidth={Math.max(1, textWidth - depth * 2)}
+              theme={theme}
+              onToggle={toggleDirectory}
+            />
           ) : (
             <FileListItem
               key={entry.id}
               entry={entry}
               selected={entry.id === selectedFileId}
               statsWidth={statsWidth}
-              textWidth={textWidth}
+              paddingLeft={1 + depth * 2}
+              textWidth={Math.max(1, textWidth - depth * 2)}
               theme={theme}
               onSelectFile={actions.selectFile}
             />

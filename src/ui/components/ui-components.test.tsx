@@ -470,13 +470,13 @@ describe("UI components", () => {
       12,
     );
 
-    expect(frame).toContain("src/ui/");
-    expect(frame).toContain("src/core/");
-    expect(frame).toContain("./");
+    expect(frame).toContain("▾ src/");
+    expect(frame).toContain("▾ ui/");
+    expect(frame).toContain("▾ core/");
     expect(frame).toContain(" zzz-root.ts");
-    expect(frame.indexOf("src/ui/")).toBeLessThan(frame.indexOf("./"));
+    expect(frame.indexOf("▾ src/")).toBeLessThan(frame.indexOf("zzz-root.ts"));
     expect(frame).toContain(" App.tsx");
-    expect(frame).toContain(" MenuDropdown.tsx");
+    expect(frame).toContain(" MenuDropdow");
     expect(frame).toContain(" watch.ts");
     expect(frame).toContain("*1 +2 -1");
     expect(frame).toContain("+5");
