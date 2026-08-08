@@ -2,7 +2,7 @@
   "mode": "pre",
   "tag": "beta",
   "initialVersions": {
-    "hunkdiff": "0.17.7",
+    "@victor-software-house/hunk": "0.17.7",
     "@hunk/session-broker": "0.0.0",
     "@hunk/session-broker-bun": "0.0.0",
     "@hunk/session-broker-core": "0.0.0",

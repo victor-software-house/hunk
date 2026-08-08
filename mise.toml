@@ -1,0 +1,115 @@
+min_version = "2026.8.2"
+
+[settings]
+experimental = true
+lockfile = true
+
+[tools]
+bun = "1.3.14"
+lefthook = "2.1.10"
+
+[env]
+_.path = ["{{config_root}}/node_modules/.bin"]
+
+[deps.bun]
+auto = true
+run = "bun install --frozen-lockfile"
+
+[tasks."hooks:install"]
+description = "Install Lefthook Git hooks"
+run = "lefthook install"
+
+[tasks.format]
+description = "Format the repository"
+run = "oxfmt --write ."
+
+[tasks."format:check"]
+description = "Check repository formatting"
+run = "oxfmt --check ."
+
+[tasks.lint]
+description = "Lint the repository"
+run = "oxlint . --deny-warnings"
+
+[tasks.typecheck]
+description = "Typecheck the repository"
+run = "tsc --noEmit"
+
+[tasks.test]
+description = "Run unit and integration-safe tests"
+run = "bun test ./src ./packages ./scripts ./test/cli ./test/session"
+
+[tasks."test:integration"]
+description = "Run PTY integration tests"
+run = "bun test ./test/pty"
+
+[tasks."test:tty-smoke"]
+description = "Run opt-in real-TTY smoke tests"
+env = { HUNK_RUN_TTY_SMOKE = "1" }
+run = "bun test ./test/smoke"
+
+[tasks."check:docs"]
+description = "Check generated documentation"
+run = "bun run ./scripts/generate-docs.ts --check"
+
+[tasks."check:pack"]
+description = "Verify the scoped package contents"
+run = "bun run ./scripts/check-pack.ts"
+
+[tasks."check:prebuilt-pack"]
+description = "Verify staged platform packages"
+run = "bun run ./scripts/check-prebuilt-pack.ts"
+
+[tasks."smoke:prebuilt-install"]
+description = "Smoke-test a staged global Bun install"
+run = "bun run ./scripts/smoke-prebuilt-install.ts"
+
+[tasks."build:npm"]
+description = "Build the package runtime bundle"
+run = "bun run ./scripts/build-npm.ts"
+
+[tasks."build:bin"]
+description = "Build the host binary"
+run = "bun run ./scripts/build-bin.ts"
+
+[tasks."stage:prebuilt:release"]
+description = "Stage downloaded platform artifacts"
+run = [
+  "bun run ./scripts/build-npm.ts",
+  "bun run ./scripts/stage-prebuilt-npm.ts --artifact-root ./dist/release/artifacts",
+]
+
+[tasks."publish:prebuilt"]
+description = "Publish staged GitHub Packages"
+run = "bun run ./scripts/publish-prebuilt-npm.ts"
+
+[tasks.version]
+description = "Consume Changesets and refresh the lockfile"
+run = "bun run ./scripts/version-packages.ts"
+
+[tasks."format:staged"]
+description = "Format staged files"
+run = "oxfmt --write"
+
+[tasks.commitlint]
+description = "Validate a commit message"
+run = "commitlint --verbose --edit"
+
+[tasks."lockfile:sync"]
+description = "Require package metadata and the Bun lockfile to agree"
+run = ["bun install --frozen-lockfile", "git diff --exit-code -- bun.lock"]
+
+[tasks."verify:static"]
+description = "Run parallel static and package gates"
+depends = ["format:check", "lint", "typecheck", "check:docs", "check:pack"]
+hide = true
+
+[tasks.verify]
+description = "Run the repository merge gate"
+depends = ["verify:static"]
+# Filesystem-watch tests are timing-sensitive under concurrent pack/build I/O.
+run = "mise run test"
+
+[tasks."verify:terminal"]
+description = "Run terminal-native integration gates"
+depends = ["test:integration", "test:tty-smoke"]

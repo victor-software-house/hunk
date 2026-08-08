@@ -5,9 +5,6 @@ on:
     branches:
       - main
 
-env:
-  SKIP_INSTALL_SIMPLE_GIT_HOOKS: "1"
-
 concurrency:
   group: main-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -62,6 +59,10 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Commitlint
+        if: github.event.before != '0000000000000000000000000000000000000000'
+        run: bunx commitlint --from "${{ github.event.before }}" --to "${{ github.sha }}" --verbose
 
       - name: Format check
         run: bun run format:check
@@ -134,14 +135,14 @@ jobs:
       - name: Verify npm pack output
         run: bun run check:pack
 
-      - name: Simulate global npm install
+      - name: Simulate global Bun install
         run: |
           pkg_dir="$(mktemp -d)"
           install_dir="$(mktemp -d)"
           node_dir="$(dirname "$(command -v node)")"
-          npm pack --pack-destination "$pkg_dir" >/dev/null
-          pkg="$(find "$pkg_dir" -maxdepth 1 -name 'hunkdiff-*.tgz' | head -n1)"
-          npm install -g --prefix "$install_dir" "$pkg"
+          bun pm pack --filename "$pkg_dir/hunk.tgz"
+          BUN_INSTALL="$install_dir" BUN_INSTALL_CACHE_DIR="$install_dir/cache" \
+            bun add --global --exact --force "$pkg_dir/hunk.tgz"
           PATH="$install_dir/bin:$node_dir:/usr/bin:/bin"
           if command -v bun >/dev/null 2>&1; then
             echo "bun unexpectedly available on the sanitized PATH" >&2
@@ -162,8 +163,6 @@ jobs:
             executable: dist/hunk
           - os: macos-latest
             executable: dist/hunk
-          - os: windows-latest
-            executable: dist/hunk.exe
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

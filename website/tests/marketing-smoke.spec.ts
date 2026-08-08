@@ -12,7 +12,9 @@ test("marketing page links into documentation and preserves core calls to action
   await expect(
     page.getByRole("navigation", { name: "Main navigation" }).getByText("Docs"),
   ).toHaveAttribute("href", "/docs/");
-  await expect(page.getByRole("button", { name: "Copy: npm i -g hunkdiff" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Copy: bun add -g @victor-software-house/hunk@beta" }),
+  ).toBeVisible();
 });
 
 test("marketing and docs share the canonical brand shell", async ({ page }) => {
@@ -63,10 +65,14 @@ test("shared headers stay usable at narrow and tablet breakpoints", async ({ pag
 test("install command copies with accessible feedback", async ({ context, page }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/");
-  await page.getByRole("button", { name: "Copy: npm i -g hunkdiff" }).click();
+  await page
+    .getByRole("button", { name: "Copy: bun add -g @victor-software-house/hunk@beta" })
+    .click();
 
   await expect(page.getByText("Copied to clipboard")).toHaveText("Copied to clipboard");
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("npm i -g hunkdiff");
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+    "bun add -g @victor-software-house/hunk@beta",
+  );
 });
 
 test("theme previews switch without loading every screenshot up front", async ({ page }) => {

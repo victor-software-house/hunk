@@ -4,16 +4,16 @@ interface Props {
 }
 
 const { context = "marketing" } = Astro.props;
-const REPO = "https://github.com/modem-dev/hunk";
+const REPO = "https://github.com/victor-software-house/hunk";
 const DISCORD = "https://discord.gg/WZFjaP6Gt8";
-const NPM = "https://www.npmjs.com/package/hunkdiff";
+const PACKAGE = "https://github.com/orgs/victor-software-house/packages/npm/package/hunk";
 ---
 
 <footer class="brand-footer" data-context={context}>
   <div class="brand-footer-links">
     <a href="/docs/">Docs</a>
     <a href={REPO}>GitHub</a>
-    <a href={NPM}>npm</a>
+    <a href={PACKAGE}>Package</a>
     <a href={DISCORD}>Discord</a>
     <a href={`${REPO}/blob/main/LICENSE`}>MIT</a>
   </div>

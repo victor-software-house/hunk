@@ -1,5 +1,5 @@
 ---
-"hunkdiff": minor
+"@victor-software-house/hunk": minor
 ---
 
 Menus and the controls help dialog now show the keys your commands are actually on. Both are built from the same command table the keyboard dispatches through, so a shortcut remapped in `[keybindings]` is advertised under its new key everywhere instead of only in the config file, and a command you unbind stops claiming a key it no longer answers to.

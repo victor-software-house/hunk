@@ -13,6 +13,7 @@ concurrency:
 jobs:
   changes:
     name: Detect code changes
+    if: github.repository == 'modem-dev/hunk'
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.detect.outputs.code_changed }}

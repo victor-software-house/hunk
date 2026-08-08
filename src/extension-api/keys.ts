@@ -1,5 +1,5 @@
 /**
- * The key-chord grammar, published as part of `hunkdiff/extension`.
+ * The key-chord grammar, published as part of `@victor-software-house/hunk/extension`.
  *
  * A chord is the textual form a binding is declared in — `"s"`, `"G"`,
  * `"ctrl+r"`, `"f10"`, `"["`. Hunk's own shortcuts, extension
@@ -7,7 +7,7 @@
  * speak this one grammar, and extension components that need their own internal
  * keys match with it too, instead of hand-reading key events.
  *
- * Every module the `hunkdiff/extension` entry reaches is published by
+ * Every module the `@victor-software-house/hunk/extension` entry reaches is published by
  * declaration emission, so this file reaches nothing but the contract itself:
  * its one import is a type-only import of `./types`, the other published
  * module, and no Hunk internal is reachable from either. `ExtensionKeyEvent`

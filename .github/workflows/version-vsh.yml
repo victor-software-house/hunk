@@ -1,0 +1,50 @@
+name: Version Packages (VSH)
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  GITHUB_TOKEN: ${{ github.token }}
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: init.defaultBranch
+  GIT_CONFIG_VALUE_0: main
+
+concurrency:
+  group: version-vsh-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Update Version Packages PR
+    if: github.repository == 'victor-software-house/hunk'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up mise
+        uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
+        with:
+          install: false
+          cache: true
+
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Install locked tools
+        run: mise install --locked
+
+      - name: Install dependencies
+        run: mise deps
+
+      - name: Create or update Version Packages PR
+        uses: changesets/action@3841a0683d3cfa6dae0f9bb335290003010fe3f0 # v1.9.0
+        with:
+          version: mise run version
+          commit: "chore(release): version packages"
+          title: "chore(release): version packages"

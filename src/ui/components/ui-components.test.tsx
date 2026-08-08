@@ -2610,7 +2610,7 @@ describe("UI components", () => {
       <StatusBar
         filter=""
         filterFocused={false}
-        noticeText="Update available: 9.9.9 • npm i -g hunkdiff"
+        noticeText="Update available: 9.9.9 • bun add -g @victor-software-house/hunk"
         terminalWidth={60}
         theme={theme}
         onCloseMenu={() => {}}
@@ -2630,7 +2630,7 @@ describe("UI components", () => {
       <StatusBar
         filter="beta"
         filterFocused={true}
-        noticeText="Update available: 9.9.9 • npm i -g hunkdiff"
+        noticeText="Update available: 9.9.9 • bun add -g @victor-software-house/hunk"
         terminalWidth={60}
         theme={theme}
         onCloseMenu={() => {}}
@@ -2652,7 +2652,7 @@ describe("UI components", () => {
       <StatusBar
         filter="beta"
         filterFocused={false}
-        noticeText="Update available: 9.9.9 • npm i -g hunkdiff"
+        noticeText="Update available: 9.9.9 • bun add -g @victor-software-house/hunk"
         terminalWidth={60}
         theme={theme}
         onCloseMenu={() => {}}

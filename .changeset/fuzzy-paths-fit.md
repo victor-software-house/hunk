@@ -1,5 +1,5 @@
 ---
-"hunkdiff": patch
+"@victor-software-house/hunk": patch
 ---
 
 Keep file stats visible and use three-dot path truncation on narrow terminals.
