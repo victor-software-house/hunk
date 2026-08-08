@@ -1,5 +1,61 @@
 # Changelog
 
+## 0.18.0-beta.5
+
+### Patch Changes
+
+- Show History as one ordered commit timeline with attached refs and full selected-target details ([`27daf12`](https://github.com/victor-software-house/hunk/commit/27daf12235db612c4cec1c389c10c9c25b4af5c4)).
+
+## 0.18.0-beta.4
+
+### Patch Changes
+
+- Keep an applied History range highlighted after the review reloads ([`83225cd`](https://github.com/victor-software-house/hunk/commit/83225cdc0a30ca22498868a1fa47d88bd7894f0a)).
+
+## 0.18.0-beta.3
+
+### Patch Changes
+
+- Execute Bun publication with the repository registry config and initialize exact-version smoke workspaces ([`c57c4e9`](https://github.com/victor-software-house/hunk/commit/c57c4e97e6bd9f0469b396f6b8d9e33c54836a05)).
+
+## 0.18.0-beta.2
+
+### Patch Changes
+
+- Use the repository GitHub Packages credentials when publishing staged native packages ([`c0daeb0`](https://github.com/victor-software-house/hunk/commit/c0daeb072e6c79c660db82550920e8a996ae3f67)).
+
+## 0.18.0-beta.1
+
+### Minor Changes
+
+- Let extensions inspect and replace the current VCS review range through Hunk's bounded reload path ([`7f8bc42`](https://github.com/victor-software-house/hunk/commit/7f8bc425860386959e72afc5e809fd41cc14f3e3)).
+
+- Add named multi-project review tabs with TUI project/range creation and agent tab controls ([`7f8bc42`](https://github.com/victor-software-house/hunk/commit/7f8bc425860386959e72afc5e809fd41cc14f3e3)).
+
+- Highlight the current line and move it with `j`/`k`, so `c` adds a note exactly where the cursor sits. Set `cursor_line` to `number` for a quieter line-number marker, or `off` to restore plain row scrolling ([`5150d21`](https://github.com/victor-software-house/hunk/commit/5150d211babd504a05219891d40b5f9ac78fd80f)).
+
+- Extension file views can register an opt-in keyboard mode that routes keys to the view ahead of the command table, with Escape always exiting ([`efa2203`](https://github.com/victor-software-house/hunk/commit/efa2203f86845e1da5849ae64fe7cd50ceeba06e)).
+
+- Extension file views can now refresh their prepared layouts with `fileViews.refresh`, letting stateful views redraw without a file or width change ([`378ec4b`](https://github.com/victor-software-house/hunk/commit/378ec4b3f7043dcd8ceecec2d22041a71e7bf8b1)).
+
+- Add a collapsible Files tree and a bounded two-endpoint History range navigator to the built-in sidebar ([`7f8bc42`](https://github.com/victor-software-house/hunk/commit/7f8bc425860386959e72afc5e809fd41cc14f3e3)).
+
+- Extension commands gain `ctx.workspace`, a host-mediated way to read reviewed documents and — with the user's confirmation — write reviewed files back to the working tree ([`4a656c7`](https://github.com/victor-software-house/hunk/commit/4a656c7dc11117ce75f40147f73a06958f011a0f)).
+
+### Patch Changes
+
+- Preserve syntax highlighting state in source-backed reviews when visible hunks begin inside folded multiline constructs ([`ab570a0`](https://github.com/victor-software-house/hunk/commit/ab570a006e54b34140210523d8edd1d9519dc491)).
+
+- Match `ctrl+<letter>` key chords against the bare control character the combination is sent as, so those bindings also fire for key events that reach the matcher undecoded ([`efa2203`](https://github.com/victor-software-house/hunk/commit/efa2203f86845e1da5849ae64fe7cd50ceeba06e)).
+
+- Keep VSH prerelease changelogs free of upstream repository links ([`1a6fca4`](https://github.com/victor-software-house/hunk/commit/1a6fca447526e4f7d7752a0588965308fb3b4ba1)).
+
+- Keep file stats visible and use three-dot path truncation on narrow terminals ([`5230cc5`](https://github.com/victor-software-house/hunk/commit/5230cc56a81655d3a86e9f54a4536a38ad269705)).
+
+- Publish the VSH fork through GitHub Packages with scoped macOS arm64 and Linux x64 binaries ([`7f8bc42`](https://github.com/victor-software-house/hunk/commit/7f8bc425860386959e72afc5e809fd41cc14f3e3)).
+
+- Display tracked CJK and emoji filenames as readable Unicode across review UI, source loading, patch input, and session APIs ([`45af37c`](https://github.com/victor-software-house/hunk/commit/45af37c5e048dbaa84e06b04acdc304ea6d3739b)).
+
 ## 0.18.0
 
 ### Highlights

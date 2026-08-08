@@ -1,5 +1,5 @@
 /**
- * Typecheck a real consumer against the built `hunkdiff/extension` declarations.
+ * Typecheck a real consumer against the built `@victor-software-house/hunk/extension` declarations.
  *
  * Everything the repo's own `tsc --noEmit` proves is about *sources*. It says
  * nothing about the declaration tree that actually ships, and the two can
@@ -38,7 +38,7 @@ const RESOLUTION_CONFIGS = {
 } as const;
 
 /**
- * Lay out a minimal `node_modules/hunkdiff` around the built extension tree.
+ * Lay out a minimal scoped package around the built extension tree.
  *
  * Only the `./extension` subpath is staged: the published declarations are
  * required to be self-contained (`check-pack` enforces that separately), so a
@@ -47,7 +47,7 @@ const RESOLUTION_CONFIGS = {
  * a network.
  */
 function stagePackage(consumerRoot: string, extensionDist: string) {
-  const packageRoot = path.join(consumerRoot, "node_modules", "hunkdiff");
+  const packageRoot = path.join(consumerRoot, "node_modules", "@victor-software-house", "hunk");
   const distDir = path.join(packageRoot, "dist", "npm", "extension");
   mkdirSync(path.dirname(distDir), { recursive: true });
   cpSync(extensionDist, distDir, { recursive: true });
@@ -56,7 +56,7 @@ function stagePackage(consumerRoot: string, extensionDist: string) {
     path.join(packageRoot, "package.json"),
     `${JSON.stringify(
       {
-        name: "hunkdiff",
+        name: "@victor-software-house/hunk",
         version: "0.0.0-consumer-check",
         type: "module",
         exports: {
@@ -155,7 +155,7 @@ export function checkExtensionConsumerTypes(options: CheckExtensionConsumerOptio
         const stdout = Buffer.from(proc.stdout).toString("utf8").trim();
         const stderr = Buffer.from(proc.stderr).toString("utf8").trim();
         throw new Error(
-          `hunkdiff/extension does not typecheck for a consumer using ` +
+          `@victor-software-house/hunk/extension does not typecheck for a consumer using ` +
             `moduleResolution: "${mode}".\n\n${stdout || stderr}`,
         );
       }
