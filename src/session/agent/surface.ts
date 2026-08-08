@@ -165,7 +165,12 @@ export const COMMENT_DIRECTION_CONSTRAINT = {
 
 const repoOption = {
   flag: "--repo <path>",
-  description: "target the live session whose repo root matches this path",
+  description: "target the live session whose active tab repo root matches this path",
+} as const satisfies AgentCommandOption;
+
+const sessionPathOption = {
+  flag: "--session-path <path>",
+  description: "target the live Hunk process launched from this path",
 } as const satisfies AgentCommandOption;
 
 const jsonOption = {
@@ -297,6 +302,68 @@ export const SESSION_AGENT_COMMANDS = {
       "hunk session reload --session-path /path/to/live-window --source /path/to/other-checkout -- diff",
     ],
   },
+  "tab-add": {
+    name: "session tab add",
+    summary: "open a named project review in a new tab",
+    positionals: [{ token: "[sessionId]" }],
+    options: [
+      repoOption,
+      sessionPathOption,
+      { flag: "--name <name>", description: "unique tab name", required: true },
+      {
+        flag: "--source <path>",
+        description: "project directory used to load the new review",
+        required: true,
+      },
+      jsonOption,
+    ],
+    synopsis: [
+      `hunk session tab add ${RELOAD_SELECTOR_SYNOPSIS} --name <name> --source <path> [--json] -- diff [ref] [-- <pathspec...>]`,
+      `hunk session tab add ${RELOAD_SELECTOR_SYNOPSIS} --name <name> --source <path> [--json] -- show [ref] [-- <pathspec...>]`,
+    ],
+    examples: [
+      'hunk session tab add --session-path /path/to/hunk-window --name "api" --source /path/to/api -- diff main...feature',
+    ],
+  },
+  "tab-select": {
+    name: "session tab select",
+    summary: "activate one review tab by id or unique name",
+    positionals: [{ token: "[sessionId]" }],
+    options: [
+      repoOption,
+      sessionPathOption,
+      { flag: "--tab <tab>", description: "tab id or unique name", required: true },
+      jsonOption,
+    ],
+    synopsis: [`hunk session tab select ${RELOAD_SELECTOR_SYNOPSIS} --tab <tab> [--json]`],
+  },
+  "tab-rename": {
+    name: "session tab rename",
+    summary: "rename one review tab",
+    positionals: [{ token: "[sessionId]" }],
+    options: [
+      repoOption,
+      sessionPathOption,
+      { flag: "--tab <tab>", description: "tab id or unique name", required: true },
+      { flag: "--name <name>", description: "new unique tab name", required: true },
+      jsonOption,
+    ],
+    synopsis: [
+      `hunk session tab rename ${RELOAD_SELECTOR_SYNOPSIS} --tab <tab> --name <name> [--json]`,
+    ],
+  },
+  "tab-close": {
+    name: "session tab close",
+    summary: "close one review tab",
+    positionals: [{ token: "[sessionId]" }],
+    options: [
+      repoOption,
+      sessionPathOption,
+      { flag: "--tab <tab>", description: "tab id or unique name", required: true },
+      jsonOption,
+    ],
+    synopsis: [`hunk session tab close ${RELOAD_SELECTOR_SYNOPSIS} --tab <tab> [--json]`],
+  },
   "comment-add": {
     name: "session comment add",
     summary: "attach one live inline review note",
@@ -409,6 +476,11 @@ export const SESSION_AGENT_COMMAND_LIST: readonly AgentCommandSpec[] =
 /** Specs for the `hunk session comment` subcommand family, in display order. */
 export const SESSION_COMMENT_COMMAND_LIST = SESSION_AGENT_COMMAND_LIST.filter((spec) =>
   spec.name.startsWith("session comment "),
+);
+
+/** Specs for the `hunk session tab` subcommand family, in display order. */
+export const SESSION_TAB_COMMAND_LIST = SESSION_AGENT_COMMAND_LIST.filter((spec) =>
+  spec.name.startsWith("session tab "),
 );
 
 /** Extract the flag name (e.g. `--old-line`) from a Commander flag definition. */

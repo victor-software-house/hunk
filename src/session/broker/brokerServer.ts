@@ -15,11 +15,13 @@ import type {
   AppliedCommentBatchResult,
   AppliedCommentResult,
   ClearedCommentsResult,
+  ClosedReviewTabResult,
   HunkSessionCommandResult,
   HunkSessionServerMessage,
   NavigatedSelectionResult,
   ReloadedSessionResult,
   RemovedCommentResult,
+  MutatedReviewTabResult,
 } from "../types";
 import {
   MAX_HTTP_BODY_BYTES,
@@ -49,6 +51,10 @@ const SUPPORTED_SESSION_ACTIONS: SessionDaemonAction[] = [
   "review",
   "navigate",
   "reload",
+  "tab-add",
+  "tab-select",
+  "tab-rename",
+  "tab-close",
   "comment-add",
   "comment-apply",
   "comment-list",
@@ -285,6 +291,52 @@ export async function handleSessionApiRequest(state: HunkSessionBrokerState, req
             },
             timeoutMessage: "Timed out waiting for the session to reload the requested contents.",
             timeoutMs: 30_000,
+          }),
+        };
+        break;
+      case "tab-add":
+        response = {
+          result: await state.dispatchCommand<MutatedReviewTabResult, "add_review_tab">({
+            selector: input.selector,
+            command: "add_review_tab",
+            input: {
+              ...input.selector,
+              name: input.name,
+              sourcePath: input.sourcePath,
+              input: input.input,
+            },
+            timeoutMessage: "Timed out waiting for the session to add the requested review tab.",
+            timeoutMs: 30_000,
+          }),
+        };
+        break;
+      case "tab-select":
+        response = {
+          result: await state.dispatchCommand<MutatedReviewTabResult, "select_review_tab">({
+            selector: input.selector,
+            command: "select_review_tab",
+            input: { ...input.selector, tab: input.tab },
+            timeoutMessage: "Timed out waiting for the session to select the requested review tab.",
+          }),
+        };
+        break;
+      case "tab-rename":
+        response = {
+          result: await state.dispatchCommand<MutatedReviewTabResult, "rename_review_tab">({
+            selector: input.selector,
+            command: "rename_review_tab",
+            input: { ...input.selector, tab: input.tab, name: input.name },
+            timeoutMessage: "Timed out waiting for the session to rename the requested review tab.",
+          }),
+        };
+        break;
+      case "tab-close":
+        response = {
+          result: await state.dispatchCommand<ClosedReviewTabResult, "close_review_tab">({
+            selector: input.selector,
+            command: "close_review_tab",
+            input: { ...input.selector, tab: input.tab },
+            timeoutMessage: "Timed out waiting for the session to close the requested review tab.",
           }),
         };
         break;

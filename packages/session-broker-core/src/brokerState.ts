@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { matchesSessionSelector, type SelectableSession } from "./selectors";
 import type {
   SessionRegistration,
   SessionServerMessage,
@@ -27,12 +26,18 @@ export interface SessionBrokerEntry<Info = unknown, State = unknown> {
   lastSeenAt: string;
 }
 
-/** Describe the minimum projected session shape shared by broker selectors and listings. */
-export interface SessionBrokerListedSession extends SelectableSession {
-  title: string;
+/** Describe the minimum projected session shape shared by broker listings. */
+export interface SessionBrokerListedSession {
+  sessionId: string;
   snapshot: {
     updatedAt: string;
   };
+}
+
+/** App-owned matching and presentation for one projected session shape. */
+export interface SessionBrokerSelectionAdapter<ListedSession> {
+  matchesSession: (session: ListedSession, selector: SessionTargetSelector) => boolean;
+  describeSession: (session: ListedSession) => string;
 }
 
 /**
@@ -46,7 +51,7 @@ export interface SessionBrokerViewAdapter<
   SelectedContext,
   SessionReview,
   SessionCommentSummary,
-> {
+> extends SessionBrokerSelectionAdapter<ListedSession> {
   parseRegistration: (value: unknown) => SessionRegistration<Info> | null;
   parseSnapshot: (value: unknown) => SessionSnapshot<State> | null;
   buildListedSession: (entry: SessionBrokerEntry<Info, State>) => ListedSession;
@@ -68,17 +73,19 @@ export interface SessionTargetSelector {
 
 function describeSessionChoices<ListedSession extends SessionBrokerListedSession>(
   sessions: ListedSession[],
+  view: Pick<SessionBrokerSelectionAdapter<ListedSession>, "describeSession">,
 ) {
-  return sessions.map((session) => `${session.sessionId} (${session.title})`).join(", ");
+  return sessions.map((session) => view.describeSession(session)).join(", ");
 }
 
-/** Resolve which live session one external command should target. */
+/** Resolve one live session through the app-owned selection hierarchy. */
 export function resolveSessionTarget<ListedSession extends SessionBrokerListedSession>(
   sessions: ListedSession[],
   selector: SessionTargetSelector,
+  view: SessionBrokerSelectionAdapter<ListedSession>,
 ) {
   if (selector.sessionId) {
-    const matched = sessions.find((session) => matchesSessionSelector(session, selector));
+    const matched = sessions.find((session) => session.sessionId === selector.sessionId);
     if (!matched) {
       throw new Error(`No active session matches sessionId ${selector.sessionId}.`);
     }
@@ -88,7 +95,7 @@ export function resolveSessionTarget<ListedSession extends SessionBrokerListedSe
 
   const sessionPath = selector.sessionPath;
   if (sessionPath) {
-    const matches = sessions.filter((session) => matchesSessionSelector(session, selector));
+    const matches = sessions.filter((session) => view.matchesSession(session, selector));
     if (matches.length === 0) {
       throw new Error(`No active session matches session path ${sessionPath}.`);
     }
@@ -96,7 +103,7 @@ export function resolveSessionTarget<ListedSession extends SessionBrokerListedSe
     if (matches.length > 1) {
       throw new Error(
         `Multiple active sessions match session path ${sessionPath}; specify sessionId instead. ` +
-          `Matches: ${describeSessionChoices(matches)}.`,
+          `Matches: ${describeSessionChoices(matches, view)}.`,
       );
     }
 
@@ -104,7 +111,7 @@ export function resolveSessionTarget<ListedSession extends SessionBrokerListedSe
   }
 
   if (selector.repoRoot) {
-    const matches = sessions.filter((session) => matchesSessionSelector(session, selector));
+    const matches = sessions.filter((session) => view.matchesSession(session, selector));
     if (matches.length === 0) {
       throw new Error(`No active session matches repoRoot ${selector.repoRoot}.`);
     }
@@ -112,7 +119,7 @@ export function resolveSessionTarget<ListedSession extends SessionBrokerListedSe
     if (matches.length > 1) {
       throw new Error(
         `Multiple active sessions match repoRoot ${selector.repoRoot}; specify sessionId instead. ` +
-          `Matches: ${describeSessionChoices(matches)}.`,
+          `Matches: ${describeSessionChoices(matches, view)}.`,
       );
     }
 
@@ -131,7 +138,7 @@ export function resolveSessionTarget<ListedSession extends SessionBrokerListedSe
 
   throw new Error(
     `Multiple active sessions are registered; specify sessionId, sessionPath, or repoRoot. ` +
-      `Sessions: ${describeSessionChoices(sessions)}.`,
+      `Sessions: ${describeSessionChoices(sessions, view)}.`,
   );
 }
 
@@ -169,7 +176,7 @@ export class SessionBrokerState<
   }
 
   getSession(selector: SessionTargetSelector) {
-    return resolveSessionTarget(this.listSessions(), selector);
+    return resolveSessionTarget(this.listSessions(), selector, this.view);
   }
 
   /** Return the live session's loaded review model, with raw patch text included only on demand. */
@@ -327,7 +334,7 @@ export class SessionBrokerState<
     timeoutMessage: string;
     timeoutMs?: number;
   }) {
-    const session = resolveSessionTarget(this.listSessions(), selector);
+    const session = resolveSessionTarget(this.listSessions(), selector, this.view);
     const requestId = randomUUID();
 
     return new Promise<ResultType>((resolve, reject) => {
@@ -410,7 +417,7 @@ export class SessionBrokerState<
 
   /** Resolve one live session selector into the full in-memory registration entry. */
   private getSessionEntry(selector: SessionTargetSelector) {
-    const session = resolveSessionTarget(this.listSessions(), selector);
+    const session = resolveSessionTarget(this.listSessions(), selector, this.view);
     const entry = this.sessions.get(session.sessionId);
     if (!entry) {
       throw new Error("The targeted session is no longer connected.");

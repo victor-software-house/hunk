@@ -33,12 +33,13 @@ export async function runInteractiveApp({
   bootstrap,
   controllingTerminal,
 }: InteractiveAppInput): Promise<void> {
+  const registration = createSessionRegistration(bootstrap);
   const hostClient = new SessionBrokerClient<
     HunkSessionInfo,
     HunkSessionState,
     HunkSessionServerMessage,
     HunkSessionCommandResult
-  >(createSessionRegistration(bootstrap), createInitialSessionSnapshot(bootstrap));
+  >(registration, createInitialSessionSnapshot(bootstrap, registration.info.activeTabId));
   hostClient.start();
 
   // Keep OpenTUI's platform-safe threading default (enabled on macOS, disabled on Linux).

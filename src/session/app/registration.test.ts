@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { SESSION_BROKER_REGISTRATION_VERSION } from "@hunk/session-broker-core";
 import { createTestDiffFile } from "../../../test/helpers/diff-helpers";
 import type { AppBootstrap } from "../../core/types";
-import { SESSION_BROKER_REGISTRATION_VERSION } from "@hunk/session-broker-core";
 import {
   createInitialSessionSnapshot,
   createSessionRegistration,
@@ -37,37 +37,50 @@ function createBootstrap(overrides: Partial<AppBootstrap> = {}): AppBootstrap {
   };
 }
 
+function activeRegistrationTab(registration: ReturnType<typeof createSessionRegistration>) {
+  return registration.info.tabs.find((tab) => tab.tabId === registration.info.activeTabId)!;
+}
+
+function createSnapshot(bootstrap: AppBootstrap) {
+  const registration = createSessionRegistration(bootstrap);
+  return createInitialSessionSnapshot(bootstrap, registration.info.activeTabId);
+}
+
 describe("session registration", () => {
   // Intent: registration preserves daemon-facing repo, file, patch, and hunk metadata.
-  test("createSessionRegistration exports review files with hunks and repo-root selection", () => {
+  test("createSessionRegistration exports one review tab with hunks and repo-root selection", () => {
     const registration = createSessionRegistration(createBootstrap());
+    const tab = activeRegistrationTab(registration);
 
     expect(registration).toMatchObject({
       registrationVersion: SESSION_BROKER_REGISTRATION_VERSION,
       pid: process.pid,
       cwd: process.cwd(),
-      repoRoot: "/repo",
-      info: {
-        inputKind: "vcs",
-        title: "working tree",
-        sourceLabel: "/repo",
-        experimentalFeatures: [],
-        files: [
-          {
-            id: "file-1",
-            path: "src/example.ts",
-            previousPath: "src/old-example.ts",
-            additions: 1,
-            deletions: 1,
-            hunkCount: 1,
-            patch: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
-          },
-        ],
-      },
+      info: { activeTabId: tab.tabId, tabs: [{ tabId: tab.tabId }] },
     });
     expect(registration.sessionId).toBeString();
     expect(registration.launchedAt).toBeString();
-    expect(registration.info.files[0]?.hunks[0]).toMatchObject({
+    expect(tab).toMatchObject({
+      name: "repo",
+      cwd: "/repo",
+      repoRoot: "/repo",
+      inputKind: "vcs",
+      title: "working tree",
+      sourceLabel: "/repo",
+      experimentalFeatures: [],
+      files: [
+        {
+          id: "file-1",
+          path: "src/example.ts",
+          previousPath: "src/old-example.ts",
+          additions: 1,
+          deletions: 1,
+          hunkCount: 1,
+          patch: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
+        },
+      ],
+    });
+    expect(tab.files[0]?.hunks[0]).toMatchObject({
       index: 0,
       oldRange: [1, 1],
       newRange: [1, 1],
@@ -82,18 +95,19 @@ describe("session registration", () => {
     ];
 
     const registration = createSessionRegistration(bootstrap);
-    const snapshot = createInitialSessionSnapshot(bootstrap);
+    const snapshot = createInitialSessionSnapshot(bootstrap, registration.info.activeTabId);
 
-    expect(registration.info.files[0]).toMatchObject({
+    expect(activeRegistrationTab(registration).files[0]).toMatchObject({
       path: "国際化/한국어-🧪.txt",
       previousPath: "国際化/日本語.txt",
     });
-    expect(snapshot.state.selectedFilePath).toBe("国際化/한국어-🧪.txt");
+    expect(snapshot.state.tabs[0]?.selectedFilePath).toBe("国際化/한국어-🧪.txt");
   });
 
-  // Intent: reloads refresh review metadata without changing the live session identity.
-  test("updateSessionRegistration preserves identity while refreshing input metadata", () => {
+  // Intent: reloads refresh only the active tab while preserving process and tab identity.
+  test("updateSessionRegistration preserves identity while refreshing active-tab metadata", () => {
     const current = createSessionRegistration(createBootstrap());
+    const currentTab = activeRegistrationTab(current);
     const nextBootstrap = createBootstrap({
       input: { kind: "patch", file: "change.patch", options: {} },
       changeset: {
@@ -105,11 +119,17 @@ describe("session registration", () => {
     });
 
     const updated = updateSessionRegistration(current, nextBootstrap);
+    const updatedTab = activeRegistrationTab(updated);
 
     expect(updated.sessionId).toBe(current.sessionId);
     expect(updated.pid).toBe(current.pid);
-    expect(updated.repoRoot).toBeUndefined();
-    expect(updated.info).toEqual({
+    expect(updated.info.activeTabId).toBe(current.info.activeTabId);
+    expect(updatedTab).toEqual({
+      tabId: currentTab.tabId,
+      name: currentTab.name,
+      cwd: "/repo",
+      repoRoot: undefined,
+      input: { kind: "patch", file: "change.patch", options: {} },
       inputKind: "patch",
       title: "patch file",
       sourceLabel: "change.patch",
@@ -118,21 +138,23 @@ describe("session registration", () => {
     });
   });
 
-  test("registration advertises STML only for opted-in launches", () => {
+  test("registration advertises STML only on its opted-in tab", () => {
     const registration = createSessionRegistration(
       createBootstrap({
         input: { kind: "vcs", staged: false, options: { experimental: true } },
       }),
     );
 
-    expect(registration.info.experimentalFeatures).toEqual(["stml"]);
+    expect(activeRegistrationTab(registration).experimentalFeatures).toEqual(["stml"]);
   });
 
   // Intent: initial snapshots expose first-hunk focus and configured note visibility.
   test("createInitialSessionSnapshot starts with the first hunk and note visibility", () => {
-    const snapshot = createInitialSessionSnapshot(createBootstrap());
+    const snapshot = createSnapshot(createBootstrap());
 
-    expect(snapshot.state).toMatchObject({
+    expect(snapshot.state.tabs).toHaveLength(1);
+    expect(snapshot.state.tabs[0]).toMatchObject({
+      tabId: snapshot.state.activeTabId,
       selectedFileId: "file-1",
       selectedFilePath: "src/example.ts",
       selectedHunkIndex: 0,
@@ -146,9 +168,9 @@ describe("session registration", () => {
     });
   });
 
-  // Intent: empty reviews still publish a valid, explicit daemon snapshot.
+  // Intent: empty reviews still publish a valid, explicit tab snapshot.
   test("createInitialSessionSnapshot handles empty changesets", () => {
-    const snapshot = createInitialSessionSnapshot(
+    const snapshot = createSnapshot(
       createBootstrap({
         changeset: {
           id: "empty",
@@ -160,17 +182,20 @@ describe("session registration", () => {
       }),
     );
 
-    expect(snapshot.state).toEqual({
-      selectedFileId: undefined,
-      selectedFilePath: undefined,
-      selectedHunkIndex: 0,
-      selectedHunkOldRange: undefined,
-      selectedHunkNewRange: undefined,
-      showAgentNotes: false,
-      liveCommentCount: 0,
-      liveComments: [],
-      reviewNoteCount: 0,
-      reviewNotes: [],
-    });
+    expect(snapshot.state.tabs).toEqual([
+      {
+        tabId: snapshot.state.activeTabId,
+        selectedFileId: undefined,
+        selectedFilePath: undefined,
+        selectedHunkIndex: 0,
+        selectedHunkOldRange: undefined,
+        selectedHunkNewRange: undefined,
+        showAgentNotes: false,
+        liveCommentCount: 0,
+        liveComments: [],
+        reviewNoteCount: 0,
+        reviewNotes: [],
+      },
+    ]);
   });
 });

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -45,6 +45,24 @@ describe("registerHostRuntimeModules", () => {
     );
 
     const mod = await importTempExtension(path);
+
+    expect(mod.default.useState).toBe(useState);
+  });
+
+  test("matches Bun's canonical loader path when registration uses a symlink", async () => {
+    const root = mkdtempSync(join(tmpdir(), "hunk-host-modules-alias-"));
+    tempDirs.push(root);
+    const sourceDir = join(root, "source");
+    const aliasDir = join(root, "alias");
+    mkdirSync(sourceDir);
+    symlinkSync(sourceDir, aliasDir, "dir");
+    const aliasPath = join(aliasDir, "ext.ts");
+    writeFileSync(
+      join(sourceDir, "ext.ts"),
+      `import { useState } from "react";\nexport default { useState };\n`,
+    );
+
+    const mod = await importTempExtension(aliasPath);
 
     expect(mod.default.useState).toBe(useState);
   });
