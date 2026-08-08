@@ -78,7 +78,7 @@ You never need `metadata` to know a file's hunks: the read-only views Hunk hands
 Register a named command, optionally bound to a key. Commands are the same mechanism Hunk's own shortcuts dispatch through — one table, one loop, built-ins first.
 
 ```ts
-import type { HunkExtensionAPI } from "hunkdiff/extension";
+import type { HunkExtensionAPI } from "@victor-software-house/hunk/extension";
 
 export default function (hunk: HunkExtensionAPI) {
   hunk.registerCommand({ id: "hello", title: "Say hello", key: "ctrl+g" }, (ctx) => {
@@ -233,7 +233,7 @@ Subscribe to a lifecycle or UI event. Handlers may be async; Hunk never blocks t
 A small bus shared by every loaded extension, for coordinating without coupling through global state. Namespace event names with your extension id. Delivery is fire-and-forget; events emitted while factories are still loading are queued until every extension has subscribed.
 
 ```ts
-import type { HunkExtensionAPI } from "hunkdiff/extension";
+import type { HunkExtensionAPI } from "@victor-software-house/hunk/extension";
 
 export default function (hunk: HunkExtensionAPI) {
   hunk.events.on<{ fileCount: number }>("summary:ready", (payload, ctx) => {
