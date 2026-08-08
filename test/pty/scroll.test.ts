@@ -339,16 +339,16 @@ describe("PTY scrolling", () => {
 
       expect(initial).toContain("aaa-collapsed.ts");
       expect(initial).toContain("▾ 362 unchanged lines");
-      expect(initial).not.toContain("366 - export const line366 = 366;");
+      expect(initial).not.toContain("367   export const line367 = 367;");
 
       await session.scrollDown(1);
       const advanced = await harness.waitForSnapshot(
         session,
-        (text) => text.includes("366 - export const line366 = 366;"),
+        (text) => text.includes("367   export const line367 = 367;"),
         5_000,
       );
 
-      expect(advanced).toContain("366 - export const line366 = 366;");
+      expect(advanced).toContain("367   export const line367 = 367;");
     } finally {
       session.close();
     }
@@ -372,7 +372,7 @@ describe("PTY scrolling", () => {
       await session.scrollDown(1);
       await harness.waitForSnapshot(
         session,
-        (text) => text.includes("366 - export const line366 = 366;"),
+        (text) => text.includes("367   export const line367 = 367;"),
         5_000,
       );
 
@@ -386,7 +386,7 @@ describe("PTY scrolling", () => {
       );
 
       expect(restored).toContain("▾ 362 unchanged lines");
-      expect(restored).not.toContain("366 - export const line366 = 366;");
+      expect(restored).not.toContain("367   export const line367 = 367;");
       expect(harness.countMatches(restored, /aaa-collapsed\.ts/g)).toBe(initialHeaderCount);
     } finally {
       session.close();

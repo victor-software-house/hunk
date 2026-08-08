@@ -28,6 +28,8 @@ import {
   formatRemoveCommentOutput,
   formatReviewOutput,
   formatSessionOutput,
+  formatTabCloseOutput,
+  formatTabMutationOutput,
   stringifyJson,
   type HunkSessionCliClient,
 } from "./cliClient";
@@ -41,6 +43,10 @@ const REQUIRED_ACTION_BY_COMMAND: Record<SessionCommandInput["action"], SessionD
   review: "review",
   navigate: "navigate",
   reload: "reload",
+  "tab-add": "tab-add",
+  "tab-select": "tab-select",
+  "tab-rename": "tab-rename",
+  "tab-close": "tab-close",
   "comment-add": "comment-add",
   "comment-apply": "comment-apply",
   "comment-list": "comment-list",
@@ -222,6 +228,26 @@ export async function runSessionCommand(input: SessionCommandInput) {
       return renderOutput(input.output, { result }, () =>
         formatReloadOutput(input.selector, result),
       );
+    }
+    case "tab-add": {
+      const result = await client.addTab({ ...input, selector: normalizedSelector! });
+      return renderOutput(input.output, { result }, () => formatTabMutationOutput("added", result));
+    }
+    case "tab-select": {
+      const result = await client.selectTab({ ...input, selector: normalizedSelector! });
+      return renderOutput(input.output, { result }, () =>
+        formatTabMutationOutput("selected", result),
+      );
+    }
+    case "tab-rename": {
+      const result = await client.renameTab({ ...input, selector: normalizedSelector! });
+      return renderOutput(input.output, { result }, () =>
+        formatTabMutationOutput("renamed", result),
+      );
+    }
+    case "tab-close": {
+      const result = await client.closeTab({ ...input, selector: normalizedSelector! });
+      return renderOutput(input.output, { result }, () => formatTabCloseOutput(result));
     }
     case "comment-add": {
       const result = await client.addComment({

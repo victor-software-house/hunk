@@ -41,8 +41,13 @@ export interface SelectedHunkSummary {
   newRange?: [number, number];
 }
 
-/** App-owned registration data that the broker carries without interpreting. */
-export interface HunkSessionInfo {
+/** One review tab's immutable registration data. */
+export interface HunkReviewTabInfo {
+  tabId: string;
+  name: string;
+  cwd: string;
+  repoRoot?: string;
+  input: CliInput;
   inputKind: CliInput["kind"];
   title: string;
   sourceLabel: string;
@@ -50,20 +55,33 @@ export interface HunkSessionInfo {
   files: SessionReviewFile[];
 }
 
-/** App-owned live state that the broker snapshots and rebroadcasts. */
-export interface HunkSessionState {
+/** One review tab's live state. */
+export interface HunkReviewTabState {
+  tabId: string;
   selectedFileId?: string;
   selectedFilePath?: string;
   selectedHunkIndex: number;
   selectedHunkOldRange?: [number, number];
   selectedHunkNewRange?: [number, number];
   showAgentNotes: boolean;
-  /** Width STML note markup renders at in the session's current layout ("new"-side anchor). */
+  /** Width STML note markup renders at in this tab's current layout. */
   noteMarkupWidth?: number;
   liveCommentCount: number;
   liveComments: SessionLiveCommentSummary[];
   reviewNoteCount?: number;
   reviewNotes?: SessionReviewNoteSummary[];
+}
+
+/** App-owned registration data that the broker carries without interpreting. */
+export interface HunkSessionInfo {
+  activeTabId: string;
+  tabs: HunkReviewTabInfo[];
+}
+
+/** App-owned live state that the broker snapshots and rebroadcasts. */
+export interface HunkSessionState {
+  activeTabId: string;
+  tabs: HunkReviewTabState[];
 }
 
 export type HunkSessionRegistration = SessionRegistration<HunkSessionInfo>;
@@ -91,6 +109,20 @@ export interface NavigateToHunkToolInput extends SessionTargetInput {
 export interface ReloadSessionToolInput extends SessionTargetInput {
   nextInput: CliInput;
   sourcePath?: string;
+}
+
+export interface AddReviewTabToolInput extends SessionTargetInput {
+  name: string;
+  sourcePath: string;
+  input: CliInput;
+}
+
+export interface TargetReviewTabToolInput extends SessionTargetInput {
+  tab: string;
+}
+
+export interface RenameReviewTabToolInput extends TargetReviewTabToolInput {
+  name: string;
 }
 
 export interface ListCommentsToolInput extends SessionTargetInput {
@@ -199,53 +231,88 @@ export interface ReloadedSessionResult {
   selectedHunkIndex: number;
 }
 
+export interface SessionReviewTabSummary {
+  tabId: string;
+  name: string;
+  cwd: string;
+  repoRoot?: string;
+  inputKind: CliInput["kind"];
+  title: string;
+  sourceLabel: string;
+  fileCount: number;
+}
+
+export interface MutatedReviewTabResult {
+  sessionId: string;
+  activeTabId: string;
+  tab: SessionReviewTabSummary;
+}
+
+export interface ClosedReviewTabResult {
+  sessionId: string;
+  activeTabId: string;
+  closedTabId: string;
+  activeTab: SessionReviewTabSummary;
+}
+
+/** One listed review tab with summarized files and its live state nested beside it. */
+export interface ListedReviewTab extends Omit<HunkReviewTabInfo, "files"> {
+  files: SessionFileSummary[];
+  state: HunkReviewTabState;
+}
+
 export interface ListedSession {
   sessionId: string;
   pid: number;
   cwd: string;
-  repoRoot?: string;
   launchedAt: string;
   terminal?: SessionTerminalMetadata;
-  inputKind: CliInput["kind"];
-  title: string;
-  sourceLabel: string;
-  experimentalFeatures?: ExperimentalFeature[];
-  fileCount: number;
-  files: SessionFileSummary[];
-  snapshot: HunkSessionSnapshot;
+  activeTabId: string;
+  tabs: ListedReviewTab[];
+  /** Broker envelope timestamp retained for ordering live processes. */
+  snapshot: { updatedAt: string };
 }
 
 export interface SelectedSessionContext {
   sessionId: string;
-  title: string;
-  sourceLabel: string;
-  cwd?: string;
-  repoRoot?: string;
-  inputKind: CliInput["kind"];
-  experimentalFeatures?: ExperimentalFeature[];
-  selectedFile: SessionFileSummary | null;
-  selectedHunk: SelectedHunkSummary | null;
-  showAgentNotes: boolean;
-  /** Width STML note markup renders at in the session's current layout. */
-  noteMarkupWidth?: number;
-  liveCommentCount: number;
+  activeTabId: string;
+  tab: {
+    tabId: string;
+    name: string;
+    cwd: string;
+    repoRoot?: string;
+    inputKind: CliInput["kind"];
+    title: string;
+    sourceLabel: string;
+    experimentalFeatures?: ExperimentalFeature[];
+    selectedFile: SessionFileSummary | null;
+    selectedHunk: SelectedHunkSummary | null;
+    showAgentNotes: boolean;
+    noteMarkupWidth?: number;
+    liveCommentCount: number;
+  };
 }
 
 export interface SessionReview {
   sessionId: string;
-  title: string;
-  sourceLabel: string;
-  cwd?: string;
-  repoRoot?: string;
-  inputKind: CliInput["kind"];
-  experimentalFeatures?: ExperimentalFeature[];
-  selectedFile: SessionReviewFile | null;
-  selectedHunk: SessionReviewHunk | null;
-  showAgentNotes: boolean;
-  liveCommentCount: number;
-  reviewNoteCount?: number;
-  reviewNotes?: SessionReviewNoteSummary[];
-  files: SessionReviewFile[];
+  activeTabId: string;
+  tab: {
+    tabId: string;
+    name: string;
+    cwd: string;
+    repoRoot?: string;
+    inputKind: CliInput["kind"];
+    title: string;
+    sourceLabel: string;
+    experimentalFeatures?: ExperimentalFeature[];
+    selectedFile: SessionReviewFile | null;
+    selectedHunk: SessionReviewHunk | null;
+    showAgentNotes: boolean;
+    liveCommentCount: number;
+    reviewNoteCount?: number;
+    reviewNotes?: SessionReviewNoteSummary[];
+    files: SessionReviewFile[];
+  };
 }
 
 export type HunkSessionCommandResult =
@@ -254,7 +321,9 @@ export type HunkSessionCommandResult =
   | NavigatedSelectionResult
   | RemovedCommentResult
   | ClearedCommentsResult
-  | ReloadedSessionResult;
+  | ReloadedSessionResult
+  | MutatedReviewTabResult
+  | ClosedReviewTabResult;
 
 export type HunkSessionClientMessage = SessionClientMessage<
   HunkSessionInfo,
@@ -274,5 +343,9 @@ export type HunkSessionServerMessage =
   | SessionServerMessage<"comment_batch", CommentBatchToolInput>
   | SessionServerMessage<"navigate_to_hunk", NavigateToHunkToolInput>
   | SessionServerMessage<"reload_session", ReloadSessionToolInput>
+  | SessionServerMessage<"add_review_tab", AddReviewTabToolInput>
+  | SessionServerMessage<"select_review_tab", TargetReviewTabToolInput>
+  | SessionServerMessage<"rename_review_tab", RenameReviewTabToolInput>
+  | SessionServerMessage<"close_review_tab", TargetReviewTabToolInput>
   | SessionServerMessage<"remove_comment", RemoveCommentToolInput>
   | SessionServerMessage<"clear_comments", ClearCommentsToolInput>;
