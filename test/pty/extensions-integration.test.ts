@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createPtyHarness } from "./harness";
@@ -129,7 +129,7 @@ describe("PTY extensions", () => {
       expect(reloaded).not.toContain("beta.ts");
       expect(reloaded).toContain("alpha.ts");
 
-      expect(readTrustState(configHome)[fixture.dir]).toBe("trusted");
+      expect(readTrustState(configHome)[realpathSync.native(fixture.dir)]).toBe("trusted");
     } finally {
       session.close();
     }
@@ -191,7 +191,7 @@ describe("PTY extensions", () => {
       expect(denied).toContain("beta.ts");
       expect(denied).not.toContain("REPO EXTENSION ACTIVE");
 
-      expect(readTrustState(configHome)[fixture.dir]).toBe("denied");
+      expect(readTrustState(configHome)[realpathSync.native(fixture.dir)]).toBe("denied");
     } finally {
       session.close();
     }
@@ -240,7 +240,7 @@ describe("PTY extensions", () => {
       expect(before).toContain("Extensions");
       expect(before).not.toContain("EXTSIDEBAR");
 
-      await session.click(/Extensions/);
+      await session.click(/Extensions(?=\s+Help)/);
       // The dropdown names the command by its title and advertises its key.
       const menu = await session.waitForText(/Toggle fixture/, { timeout: 20_000 });
       expect(menu).toMatch(/Toggle fixture\s+y/);
@@ -377,7 +377,7 @@ describe("PTY extensions", () => {
       // gesture until the command itself proves that the extension is ready.
       let menu: string | null = null;
       for (let attempt = 0; attempt < 5 && menu === null; attempt += 1) {
-        await session.clickAt(33, 0);
+        await session.click(/Extensions(?=\s+Help)/);
         try {
           menu = await harness.waitForSnapshot(
             session,

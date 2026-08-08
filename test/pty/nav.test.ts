@@ -97,23 +97,17 @@ describe("PTY navigation", () => {
         timeout: 15_000,
       });
 
-      let reachedShortFileMidHunk = false;
-      for (let index = 0; index < 24; index += 1) {
+      // The fixture has 18 long-file hunks followed by two short-file hunks.
+      // Navigate by that semantic count: the larger tabbed viewport can render
+      // the second short hunk while the first is still selected.
+      for (let index = 0; index < 19; index += 1) {
         await session.press("]");
-        const snapshot = await session.text({ immediate: true });
-        if (snapshot.includes("export const mid = 4;")) {
-          reachedShortFileMidHunk = true;
-          break;
-        }
       }
-
-      if (!reachedShortFileMidHunk) {
-        await harness.waitForSnapshot(
-          session,
-          (text) => text.includes("export const mid = 4;"),
-          5_000,
-        );
-      }
+      await harness.waitForSnapshot(
+        session,
+        (text) => text.includes("export const mid = 4;"),
+        5_000,
+      );
 
       await session.press("[");
       await session.waitIdle({ timeout: 80 });

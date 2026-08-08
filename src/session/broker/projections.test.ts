@@ -20,10 +20,10 @@ function createEntry() {
 }
 
 describe("hunk session projections", () => {
-  test("buildListedHunkSession keeps terminal metadata and file summaries", () => {
+  test("buildListedHunkSession keeps terminal metadata and tab-nested file summaries", () => {
     const entry = {
       registration: createTestSessionRegistration({
-        experimentalFeatures: ["stml"],
+        activeTab: { experimentalFeatures: ["stml"] },
         terminal: {
           program: "iTerm.app",
           locations: [{ source: "tty", tty: "/dev/ttys003" }],
@@ -35,16 +35,23 @@ describe("hunk session projections", () => {
     expect(buildListedHunkSession(entry)).toEqual(
       expect.objectContaining({
         terminal: entry.registration.terminal,
-        experimentalFeatures: ["stml"],
-        fileCount: 1,
-        files: [expect.objectContaining({ path: "src/example.ts", hunkCount: 1 })],
+        activeTabId: "tab-1",
+        tabs: [
+          expect.objectContaining({
+            experimentalFeatures: ["stml"],
+            files: [expect.objectContaining({ path: "src/example.ts", hunkCount: 1 })],
+            state: expect.objectContaining({ tabId: "tab-1" }),
+          }),
+        ],
       }),
     );
   });
 
-  test("buildSelectedHunkSessionContext projects the current file and selected ranges", () => {
+  test("buildSelectedHunkSessionContext projects the active tab's file and ranges", () => {
     const session = buildListedHunkSession({
-      registration: createTestSessionRegistration({ experimentalFeatures: ["stml"] }),
+      registration: createTestSessionRegistration({
+        activeTab: { experimentalFeatures: ["stml"] },
+      }),
       snapshot: createTestSessionSnapshot({
         selectedHunkIndex: 1,
         selectedHunkOldRange: [8, 8],
@@ -54,13 +61,12 @@ describe("hunk session projections", () => {
 
     expect(buildSelectedHunkSessionContext(session)).toEqual(
       expect.objectContaining({
-        experimentalFeatures: ["stml"],
-        selectedFile: expect.objectContaining({ path: "src/example.ts" }),
-        selectedHunk: {
-          index: 1,
-          oldRange: [8, 8],
-          newRange: [8, 9],
-        },
+        activeTabId: "tab-1",
+        tab: expect.objectContaining({
+          experimentalFeatures: ["stml"],
+          selectedFile: expect.objectContaining({ path: "src/example.ts" }),
+          selectedHunk: { index: 1, oldRange: [8, 8], newRange: [8, 9] },
+        }),
       }),
     );
   });
@@ -69,13 +75,13 @@ describe("hunk session projections", () => {
     const entry = createEntry();
 
     const withoutPatch = buildHunkSessionReview(entry);
-    expect(withoutPatch.files[0]).not.toHaveProperty("patch");
+    expect(withoutPatch.tab.files[0]).not.toHaveProperty("patch");
 
     const withPatch = buildHunkSessionReview(entry, { includePatch: true });
-    expect(withPatch.files[0]).toEqual(expect.objectContaining({ patch: "@@ -1,1 +1,1 @@" }));
+    expect(withPatch.tab.files[0]).toEqual(expect.objectContaining({ patch: "@@ -1,1 +1,1 @@" }));
   });
 
-  test("buildHunkSessionReview can include live review notes on demand", () => {
+  test("buildHunkSessionReview can include active-tab review notes on demand", () => {
     const entry = {
       registration: createTestSessionRegistration(),
       snapshot: createTestSessionSnapshot({
@@ -83,7 +89,7 @@ describe("hunk session projections", () => {
         reviewNotes: [
           {
             noteId: "user:1",
-            source: "user",
+            source: "user" as const,
             filePath: "src/example.ts",
             body: "Please cover this case.",
             author: "user",
@@ -94,13 +100,13 @@ describe("hunk session projections", () => {
       }),
     };
 
-    expect(buildHunkSessionReview(entry).reviewNotes).toBeUndefined();
-    expect(buildHunkSessionReview(entry, { includeNotes: true }).reviewNotes).toEqual([
+    expect(buildHunkSessionReview(entry).tab.reviewNotes).toBeUndefined();
+    expect(buildHunkSessionReview(entry, { includeNotes: true }).tab.reviewNotes).toEqual([
       expect.objectContaining({ noteId: "user:1", source: "user" }),
     ]);
   });
 
-  test("listHunkSessionComments returns live comments and honors file filters", () => {
+  test("listHunkSessionComments returns only active-tab comments and honors file filters", () => {
     const session = buildListedHunkSession({
       registration: createTestSessionRegistration(),
       snapshot: createTestSessionSnapshot({
@@ -123,7 +129,7 @@ describe("hunk session projections", () => {
     ]);
   });
 
-  test("listHunkSessionNotes filters by file and source", () => {
+  test("listHunkSessionNotes filters the active tab by file and source", () => {
     const session = buildListedHunkSession({
       registration: createTestSessionRegistration(),
       snapshot: createTestSessionSnapshot({

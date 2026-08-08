@@ -15,6 +15,7 @@ import type {
   AppliedCommentBatchResult,
   AppliedCommentResult,
   ClearedCommentsResult,
+  ClosedReviewTabResult,
   ListedSession,
   NavigatedSelectionResult,
   ReloadedSessionResult,
@@ -23,6 +24,7 @@ import type {
   SessionLiveCommentSummary,
   SessionReview,
   SessionReviewNoteSummary,
+  MutatedReviewTabResult,
 } from "../types";
 import type {
   SessionCommentAddCommandInput,
@@ -34,6 +36,9 @@ import type {
   SessionReloadCommandInput,
   SessionReviewCommandInput,
   SessionSelectorInput,
+  SessionTabAddCommandInput,
+  SessionTabRenameCommandInput,
+  SessionTabTargetCommandInput,
 } from "../../core/types";
 import { describeSessionSelector } from "@hunk/session-broker-core";
 
@@ -45,6 +50,10 @@ export interface HunkSessionCliClient {
   getSessionReview(input: SessionReviewCommandInput): Promise<SessionReview>;
   navigateToHunk(input: SessionNavigateCommandInput): Promise<NavigatedSelectionResult>;
   reloadSession(input: SessionReloadCommandInput): Promise<ReloadedSessionResult>;
+  addTab(input: SessionTabAddCommandInput): Promise<MutatedReviewTabResult>;
+  selectTab(input: SessionTabTargetCommandInput): Promise<MutatedReviewTabResult>;
+  renameTab(input: SessionTabRenameCommandInput): Promise<MutatedReviewTabResult>;
+  closeTab(input: SessionTabTargetCommandInput): Promise<ClosedReviewTabResult>;
   addComment(input: SessionCommentAddCommandInput): Promise<AppliedCommentResult>;
   applyComments(input: SessionCommentApplyCommandInput): Promise<AppliedCommentBatchResult>;
   listComments(
@@ -149,6 +158,49 @@ class HttpHunkSessionCliClient implements HunkSessionCliClient {
     ).result;
   }
 
+  async addTab(input: SessionTabAddCommandInput) {
+    return (
+      await this.request<{ result: MutatedReviewTabResult }>({
+        action: "tab-add",
+        selector: input.selector,
+        name: input.name,
+        sourcePath: input.sourcePath,
+        input: input.input,
+      })
+    ).result;
+  }
+
+  async selectTab(input: SessionTabTargetCommandInput) {
+    return (
+      await this.request<{ result: MutatedReviewTabResult }>({
+        action: "tab-select",
+        selector: input.selector,
+        tab: input.tab,
+      })
+    ).result;
+  }
+
+  async renameTab(input: SessionTabRenameCommandInput) {
+    return (
+      await this.request<{ result: MutatedReviewTabResult }>({
+        action: "tab-rename",
+        selector: input.selector,
+        tab: input.tab,
+        name: input.name,
+      })
+    ).result;
+  }
+
+  async closeTab(input: SessionTabTargetCommandInput) {
+    return (
+      await this.request<{ result: ClosedReviewTabResult }>({
+        action: "tab-close",
+        selector: input.selector,
+        tab: input.tab,
+      })
+    ).result;
+  }
+
   async addComment(input: SessionCommentAddCommandInput) {
     return (
       await this.request<{ result: AppliedCommentResult }>({
@@ -223,13 +275,18 @@ export function stringifyJson(value: unknown) {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
+function activeListedTab(session: ListedSession) {
+  const tab = session.tabs.find((candidate) => candidate.tabId === session.activeTabId);
+  if (!tab) throw new Error(`Active review tab is missing: ${session.activeTabId}`);
+  return tab;
+}
+
 function formatSelectedSummary(session: ListedSession) {
-  const filePath = session.snapshot.state.selectedFilePath
-    ? formatSessionPath(session.snapshot.state.selectedFilePath)
+  const tab = activeListedTab(session);
+  const filePath = tab.state.selectedFilePath
+    ? formatSessionPath(tab.state.selectedFilePath)
     : "(none)";
-  const hunkNumber = session.snapshot.state.selectedFilePath
-    ? session.snapshot.state.selectedHunkIndex + 1
-    : 0;
+  const hunkNumber = tab.state.selectedFilePath ? tab.state.selectedHunkIndex + 1 : 0;
   return filePath === "(none)" ? filePath : `${filePath} hunk ${hunkNumber}`;
 }
 
@@ -293,17 +350,19 @@ export function formatListOutput(sessions: ListedSession[]) {
   return `${sessions
     .map((session) => {
       const terminal = session.terminal;
+      const tab = activeListedTab(session);
       return [
-        `${session.sessionId}  ${formatSessionPath(session.title)}`,
-        `  path: ${formatSessionPath(session.cwd)}`,
-        `  repo: ${session.repoRoot ? formatSessionPath(session.repoRoot) : "-"}`,
+        `${session.sessionId}  ${formatSessionPath(tab.name)}`,
+        `  path: ${formatSessionPath(tab.cwd)}`,
+        `  repo: ${tab.repoRoot ? formatSessionPath(tab.repoRoot) : "-"}`,
         ...formatTerminalLines(terminal, {
           headerLabel: "  terminal",
           locationLabel: "  location",
         }),
+        `  active tab: ${formatSessionPath(tab.name)} (${session.tabs.length} total)`,
         `  focus: ${formatSelectedSummary(session)}`,
-        `  files: ${session.fileCount}`,
-        `  comments: ${session.snapshot.state.liveCommentCount}`,
+        `  files: ${tab.files.length}`,
+        `  comments: ${tab.state.liveCommentCount}`,
       ].join("\n");
     })
     .join("\n\n")}\n`;
@@ -321,16 +380,18 @@ function formatSessionSelector(selector: SessionSelectorInput) {
 
 export function formatSessionOutput(session: ListedSession) {
   const terminal = session.terminal;
+  const activeTab = activeListedTab(session);
 
   return [
     `Session: ${session.sessionId}`,
-    `Title: ${formatSessionPath(session.title)}`,
-    `Source: ${formatSessionPath(session.sourceLabel)}`,
-    `Path: ${formatSessionPath(session.cwd)}`,
-    `Repo: ${session.repoRoot ? formatSessionPath(session.repoRoot) : "-"}`,
-    `Input: ${session.inputKind}`,
-    ...((session.experimentalFeatures?.length ?? 0) > 0
-      ? [`Experimental features: ${session.experimentalFeatures!.join(", ")}`]
+    `Active tab: ${formatSessionPath(activeTab.name)} (${activeTab.tabId})`,
+    `Path: ${formatSessionPath(activeTab.cwd)}`,
+    `Repo: ${activeTab.repoRoot ? formatSessionPath(activeTab.repoRoot) : "-"}`,
+    `Input: ${activeTab.inputKind}`,
+    `Title: ${formatSessionPath(activeTab.title)}`,
+    `Source: ${formatSessionPath(activeTab.sourceLabel)}`,
+    ...((activeTab.experimentalFeatures?.length ?? 0) > 0
+      ? [`Experimental features: ${activeTab.experimentalFeatures!.join(", ")}`]
       : []),
     `Launched: ${session.launchedAt}`,
     ...formatTerminalLines(terminal, {
@@ -338,10 +399,15 @@ export function formatSessionOutput(session: ListedSession) {
       locationLabel: "Location",
     }),
     `Selected: ${formatSelectedSummary(session)}`,
-    `Agent notes visible: ${session.snapshot.state.showAgentNotes ? "yes" : "no"}`,
-    `Live comments: ${session.snapshot.state.liveCommentCount}`,
+    `Agent notes visible: ${activeTab.state.showAgentNotes ? "yes" : "no"}`,
+    `Live comments: ${activeTab.state.liveCommentCount}`,
+    "Tabs:",
+    ...session.tabs.map(
+      (tab) =>
+        `  ${tab.tabId === session.activeTabId ? "*" : "-"} ${formatSessionPath(tab.name)} (${tab.tabId}, ${tab.files.length} files)`,
+    ),
     "Files:",
-    ...session.files.map(
+    ...activeTab.files.map(
       (file) =>
         `  - ${formatSessionPath(file.path)} (+${file.additions} -${file.deletions}, hunks: ${file.hunkCount})`,
     ),
@@ -350,71 +416,71 @@ export function formatSessionOutput(session: ListedSession) {
 }
 
 export function formatContextOutput(context: SelectedSessionContext) {
-  const selectedFile = context.selectedFile?.path
-    ? formatSessionPath(context.selectedFile.path)
-    : "(none)";
-  const hunkNumber = context.selectedHunk ? context.selectedHunk.index + 1 : 0;
-  const oldRange = context.selectedHunk?.oldRange
-    ? `${context.selectedHunk.oldRange[0]}..${context.selectedHunk.oldRange[1]}`
+  const { tab } = context;
+  const selectedFile = tab.selectedFile?.path ? formatSessionPath(tab.selectedFile.path) : "(none)";
+  const hunkNumber = tab.selectedHunk ? tab.selectedHunk.index + 1 : 0;
+  const oldRange = tab.selectedHunk?.oldRange
+    ? `${tab.selectedHunk.oldRange[0]}..${tab.selectedHunk.oldRange[1]}`
     : "-";
-  const newRange = context.selectedHunk?.newRange
-    ? `${context.selectedHunk.newRange[0]}..${context.selectedHunk.newRange[1]}`
+  const newRange = tab.selectedHunk?.newRange
+    ? `${tab.selectedHunk.newRange[0]}..${tab.selectedHunk.newRange[1]}`
     : "-";
 
   return [
     `Session: ${context.sessionId}`,
-    `Title: ${formatSessionPath(context.title)}`,
-    `Path: ${context.cwd ? formatSessionPath(context.cwd) : "-"}`,
-    `Repo: ${context.repoRoot ? formatSessionPath(context.repoRoot) : "-"}`,
+    `Tab: ${formatSessionPath(tab.name)} (${tab.tabId})`,
+    `Title: ${formatSessionPath(tab.title)}`,
+    `Path: ${tab.cwd ? formatSessionPath(tab.cwd) : "-"}`,
+    `Repo: ${tab.repoRoot ? formatSessionPath(tab.repoRoot) : "-"}`,
     `File: ${selectedFile}`,
-    `Hunk: ${context.selectedHunk ? hunkNumber : "-"}`,
+    `Hunk: ${tab.selectedHunk ? hunkNumber : "-"}`,
     `Old range: ${oldRange}`,
     `New range: ${newRange}`,
-    `Agent notes visible: ${context.showAgentNotes ? "yes" : "no"}`,
-    ...(context.experimentalFeatures?.includes("stml")
+    `Agent notes visible: ${tab.showAgentNotes ? "yes" : "no"}`,
+    ...(tab.experimentalFeatures?.includes("stml")
       ? [
-          `Experimental features: ${context.experimentalFeatures.join(", ")}`,
-          `Note markup width: ${context.noteMarkupWidth ?? "-"}`,
+          `Experimental features: ${tab.experimentalFeatures.join(", ")}`,
+          `Note markup width: ${tab.noteMarkupWidth ?? "-"}`,
         ]
       : []),
-    `Live comments: ${context.liveCommentCount}`,
+    `Live comments: ${tab.liveCommentCount}`,
     "",
   ].join("\n");
 }
 
-/** Render one human-readable summary of the exported live session review model. */
+/** Render one human-readable summary of the exported active-tab review model. */
 export function formatReviewOutput(review: SessionReview) {
-  const selectedFile = review.selectedFile?.path
-    ? formatSessionPath(review.selectedFile.path)
-    : "(none)";
-  const hunkNumber = review.selectedHunk ? review.selectedHunk.index + 1 : "-";
+  const { tab } = review;
+  const selectedFile = tab.selectedFile?.path ? formatSessionPath(tab.selectedFile.path) : "(none)";
+  const hunkNumber = tab.selectedHunk ? tab.selectedHunk.index + 1 : "-";
 
   return [
     `Session: ${review.sessionId}`,
-    `Title: ${formatSessionPath(review.title)}`,
-    `Source: ${formatSessionPath(review.sourceLabel)}`,
-    `Path: ${review.cwd ? formatSessionPath(review.cwd) : "-"}`,
-    `Repo: ${review.repoRoot ? formatSessionPath(review.repoRoot) : "-"}`,
-    `Input: ${review.inputKind}`,
-    ...((review.experimentalFeatures?.length ?? 0) > 0
-      ? [`Experimental features: ${review.experimentalFeatures!.join(", ")}`]
+    `Tab: ${formatSessionPath(tab.name)} (${tab.tabId})`,
+    `Title: ${formatSessionPath(tab.title)}`,
+    `Source: ${formatSessionPath(tab.sourceLabel)}`,
+    `Path: ${tab.cwd ? formatSessionPath(tab.cwd) : "-"}`,
+    `Repo: ${tab.repoRoot ? formatSessionPath(tab.repoRoot) : "-"}`,
+    `Input: ${tab.inputKind}`,
+    ...((tab.experimentalFeatures?.length ?? 0) > 0
+      ? [`Experimental features: ${tab.experimentalFeatures!.join(", ")}`]
       : []),
     `Selected file: ${selectedFile}`,
     `Selected hunk: ${hunkNumber}`,
-    `Agent notes visible: ${review.showAgentNotes ? "yes" : "no"}`,
-    `Live comments: ${review.liveCommentCount}`,
-    `Review notes: ${review.reviewNoteCount ?? review.reviewNotes?.length ?? 0}`,
-    ...(review.reviewNotes
+    `Agent notes visible: ${tab.showAgentNotes ? "yes" : "no"}`,
+    `Live comments: ${tab.liveCommentCount}`,
+    `Review notes: ${tab.reviewNoteCount ?? tab.reviewNotes?.length ?? 0}`,
+    ...(tab.reviewNotes
       ? [
           "Notes:",
-          ...review.reviewNotes.map(
+          ...tab.reviewNotes.map(
             (note) =>
               `  - ${note.noteId} [${note.source}] ${formatSessionPath(note.filePath)}: ${note.body}`,
           ),
         ]
       : []),
     "Files:",
-    ...review.files.flatMap((file) => [
+    ...tab.files.flatMap((file) => [
       `  - ${formatSessionPath(file.path)} (+${file.additions} -${file.deletions}, hunks: ${file.hunkCount})`,
       ...file.hunks.map((hunk) => `      hunk ${hunk.index + 1}: ${hunk.header}`),
     ]),
@@ -434,6 +500,17 @@ export function formatReloadOutput(selector: SessionSelectorInput, result: Reloa
     ? `${formatSessionPath(result.selectedFilePath)} hunk ${result.selectedHunkIndex + 1}`
     : "(no files)";
   return `Reloaded ${formatSessionSelector(selector)} with ${formatSessionPath(result.title)} (${result.fileCount} files). Selected: ${selected}.\n`;
+}
+
+export function formatTabMutationOutput(
+  action: "added" | "selected" | "renamed",
+  result: MutatedReviewTabResult,
+) {
+  return `${action[0]!.toUpperCase()}${action.slice(1)} tab ${formatSessionPath(result.tab.name)} (${result.tab.tabId}) in session ${result.sessionId}.\n`;
+}
+
+export function formatTabCloseOutput(result: ClosedReviewTabResult) {
+  return `Closed tab ${result.closedTabId}. Active: ${formatSessionPath(result.activeTab.name)} (${result.activeTab.tabId}).\n`;
 }
 
 /** Format the STML render notes attached to one applied comment, if any. */

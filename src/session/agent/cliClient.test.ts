@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  createTestListedReviewTab,
   createTestListedSession,
   createTestSelectedSessionContext,
   createTestSessionFileSummary,
@@ -91,6 +92,46 @@ describe("HTTP Hunk session CLI client", () => {
           filePath: "src/app.ts",
         },
       },
+      "tab-add": {
+        result: {
+          sessionId: "session-1",
+          activeTabId: "tab-2",
+          tab: {
+            tabId: "tab-2",
+            name: "api",
+            cwd: "/api",
+            repoRoot: "/api",
+            inputKind: "vcs" as const,
+            title: "api working tree",
+            sourceLabel: "/api",
+            fileCount: 1,
+          },
+        },
+      },
+      "tab-select": { result: undefined as unknown },
+      "tab-rename": { result: undefined as unknown },
+      "tab-close": {
+        result: {
+          sessionId: "session-1",
+          activeTabId: "tab-1",
+          closedTabId: "tab-2",
+          activeTab: {
+            tabId: "tab-1",
+            name: "repo",
+            cwd: "/repo",
+            repoRoot: "/repo",
+            inputKind: "vcs" as const,
+            title: "repo working tree",
+            sourceLabel: "/repo",
+            fileCount: 1,
+          },
+        },
+      },
+    };
+    responses["tab-select"].result = responses["tab-add"].result;
+    responses["tab-rename"].result = {
+      ...responses["tab-add"].result,
+      tab: { ...responses["tab-add"].result.tab, name: "backend" },
     };
 
     globalThis.fetch = (async (input, init) => {
@@ -149,6 +190,45 @@ describe("HTTP Hunk session CLI client", () => {
         output: "json",
       }),
     ).toMatchObject({ title: "repo working tree" });
+    expect(
+      await client.addTab({
+        kind: "session",
+        action: "tab-add",
+        selector,
+        name: "api",
+        sourcePath: "/api",
+        input: { kind: "vcs", range: "main...feature", staged: false, options: {} },
+        output: "json",
+      }),
+    ).toMatchObject({ activeTabId: "tab-2", tab: { name: "api" } });
+    expect(
+      await client.selectTab({
+        kind: "session",
+        action: "tab-select",
+        selector,
+        tab: "api",
+        output: "json",
+      }),
+    ).toMatchObject({ tab: { name: "api" } });
+    expect(
+      await client.renameTab({
+        kind: "session",
+        action: "tab-rename",
+        selector,
+        tab: "api",
+        name: "backend",
+        output: "json",
+      }),
+    ).toMatchObject({ tab: { name: "backend" } });
+    expect(
+      await client.closeTab({
+        kind: "session",
+        action: "tab-close",
+        selector,
+        tab: "backend",
+        output: "json",
+      }),
+    ).toMatchObject({ closedTabId: "tab-2", activeTab: { name: "repo" } });
     expect(
       await client.addComment({
         kind: "session",
@@ -224,6 +304,16 @@ describe("HTTP Hunk session CLI client", () => {
         sourcePath: "/repo",
       },
       {
+        action: "tab-add",
+        selector,
+        name: "api",
+        sourcePath: "/api",
+        input: { kind: "vcs", range: "main...feature", staged: false, options: {} },
+      },
+      { action: "tab-select", selector, tab: "api" },
+      { action: "tab-rename", selector, tab: "api", name: "backend" },
+      { action: "tab-close", selector, tab: "backend" },
+      {
         action: "comment-add",
         selector,
         filePath: "src/app.ts",
@@ -284,13 +374,17 @@ describe("HTTP Hunk session CLI client", () => {
 describe("Hunk session CLI formatters", () => {
   test("list and get output preserve terminal metadata and selected hunk summaries", () => {
     const session = createTestListedSession({
-      files: [createTestSessionFileSummary({ path: "src/app.ts", additions: 3, deletions: 1 })],
-      snapshot: createTestSessionSnapshot({
-        selectedFilePath: "src/app.ts",
-        selectedHunkIndex: 2,
-        showAgentNotes: true,
-        liveCommentCount: 4,
-      }),
+      tabs: [
+        createTestListedReviewTab({
+          files: [createTestSessionFileSummary({ path: "src/app.ts", additions: 3, deletions: 1 })],
+          state: createTestSessionSnapshot({
+            selectedFilePath: "src/app.ts",
+            selectedHunkIndex: 2,
+            showAgentNotes: true,
+            liveCommentCount: 4,
+          }).state.tabs[0]!,
+        }),
+      ],
       terminal: {
         program: "ghostty",
         locations: [
@@ -304,7 +398,7 @@ describe("Hunk session CLI formatters", () => {
 
     expect(formatListOutput([session])).toBe(
       [
-        "session-1  repo working tree",
+        "session-1  repo",
         "  path: /repo",
         "  repo: /repo",
         "  terminal: ghostty",
@@ -312,6 +406,7 @@ describe("Hunk session CLI formatters", () => {
         "  location[tmux]: pane %7, session work",
         "  location[iterm2]: window 1, tab 2, pane 3, terminal abc",
         "  location[unknown]: present",
+        "  active tab: repo (1 total)",
         "  focus: src/app.ts hunk 3",
         "  files: 1",
         "  comments: 4",
@@ -328,12 +423,17 @@ describe("Hunk session CLI formatters", () => {
   test("human-readable session paths cannot emit terminal controls", () => {
     const unsafePath = "src/日本語\x1b[2J\tline\n🧪.ts";
     const session = createTestListedSession({
-      title: unsafePath,
-      sourceLabel: unsafePath,
-      cwd: unsafePath,
-      repoRoot: unsafePath,
-      files: [createTestSessionFileSummary({ path: unsafePath })],
-      snapshot: createTestSessionSnapshot({ selectedFilePath: unsafePath }),
+      tabs: [
+        createTestListedReviewTab({
+          name: unsafePath,
+          title: unsafePath,
+          sourceLabel: unsafePath,
+          cwd: unsafePath,
+          repoRoot: unsafePath,
+          files: [createTestSessionFileSummary({ path: unsafePath })],
+          state: createTestSessionSnapshot({ selectedFilePath: unsafePath }).state.tabs[0]!,
+        }),
+      ],
     });
     const output = formatSessionOutput(session);
 
@@ -361,19 +461,25 @@ describe("Hunk session CLI formatters", () => {
 
   test("empty and unselected summaries stay explicit in human-readable output", () => {
     const session = createTestListedSession({
-      snapshot: createTestSessionSnapshot({
-        selectedFileId: undefined,
-        selectedFilePath: undefined,
-        selectedHunkIndex: 0,
-      }),
+      tabs: [
+        createTestListedReviewTab({
+          state: createTestSessionSnapshot({
+            selectedFileId: undefined,
+            selectedFilePath: undefined,
+            selectedHunkIndex: 0,
+          }).state.tabs[0]!,
+        }),
+      ],
     });
     const context = createTestSelectedSessionContext({
-      cwd: undefined,
-      repoRoot: undefined,
-      selectedFile: null,
-      selectedHunk: null,
-      showAgentNotes: true,
-      liveCommentCount: 2,
+      tab: {
+        cwd: "",
+        repoRoot: undefined,
+        selectedFile: null,
+        selectedHunk: null,
+        showAgentNotes: true,
+        liveCommentCount: 2,
+      },
     });
 
     expect(formatListOutput([])).toBe("No active Hunk sessions.\n");
@@ -381,6 +487,7 @@ describe("Hunk session CLI formatters", () => {
     expect(formatContextOutput(context)).toBe(
       [
         "Session: session-1",
+        "Tab: repo (tab-1)",
         "Title: repo diff",
         "Path: -",
         "Repo: -",
@@ -397,12 +504,10 @@ describe("Hunk session CLI formatters", () => {
 
   test("context output exposes STML geometry only for opted-in sessions", () => {
     const normal = createTestSelectedSessionContext({
-      experimentalFeatures: [],
-      noteMarkupWidth: undefined,
+      tab: { experimentalFeatures: [], noteMarkupWidth: undefined },
     });
     const experimental = createTestSelectedSessionContext({
-      experimentalFeatures: ["stml"],
-      noteMarkupWidth: 72,
+      tab: { experimentalFeatures: ["stml"], noteMarkupWidth: 72 },
     });
 
     expect(formatContextOutput(normal)).not.toContain("markup");
@@ -434,20 +539,23 @@ describe("Hunk session CLI formatters", () => {
     expect(
       formatReviewOutput(
         createTestSessionReview({
-          files: [firstFile, secondFile],
-          selectedFile: null,
-          selectedHunk: null,
-          title: "repo diff",
-          inputKind: "diff",
-          liveCommentCount: 1,
+          tab: {
+            files: [firstFile, secondFile],
+            selectedFile: null,
+            selectedHunk: null,
+            title: "repo diff",
+            inputKind: "diff",
+            liveCommentCount: 1,
+          },
         }),
       ),
     ).toBe(
       [
         "Session: session-1",
+        "Tab: repo (tab-1)",
         "Title: repo diff",
         "Source: /repo",
-        "Path: -",
+        "Path: /repo",
         "Repo: /repo",
         "Input: diff",
         "Selected file: (none)",
