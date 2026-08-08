@@ -179,9 +179,9 @@ describe("PTY navigation", () => {
       expect(initial).toContain("alpha.ts");
 
       await session.type("R");
-      const history = await session.waitForText(/Choose base, then head/, { timeout: 5_000 });
+      const history = await session.waitForText(/[0-9a-f]{7} initial/, { timeout: 5_000 });
       expect(history).toContain("History");
-      expect(history).toMatch(/\* (?:main|master)/);
+      expect(history).toContain("Choose base, then head");
       expect(history).toContain("alpha.ts");
 
       await session.press("escape");
