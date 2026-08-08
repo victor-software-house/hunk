@@ -10,6 +10,8 @@ pre-commit:
       run: mise run lint
     typecheck:
       run: mise run typecheck
+    forkctl-staged:
+      run: mise run fork check -s
 
 commit-msg:
   skip:
@@ -30,3 +32,5 @@ pre-push:
       run: mise run lint
     typecheck:
       run: mise run typecheck
+    forkctl-check:
+      run: mise run fork check -q

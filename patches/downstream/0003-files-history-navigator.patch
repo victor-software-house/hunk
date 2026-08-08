@@ -1,0 +1,1808 @@
+files-history-navigator
+
+From: Victor Araújo <victor@victor-software-house.com>
+
+Downstream-Reason: Add a collapsible Files tree and bounded local History range navigator to the built-in sidebar.
+Upstream-Status: not-submitted
+Drop-When: Upstream provides equivalent collapsible file navigation and two-endpoint local history selection.
+---
+ .changeset/persistent-history-highlight.md         |    5 
+ .changeset/quick-file-history.md                   |    5 
+ .changeset/unified-history-timeline.md             |    5 
+ README.md                                          |   28 +
+ src/extension-api/types.ts                         |    2 
+ .../default/ui/sidebar/historyTimeline.test.ts     |   62 +++
+ .../default/ui/sidebar/historyTimeline.ts          |   59 +++
+ src/extensions/default/ui/sidebar/index.tsx        |  439 +++++++++++++++-----
+ src/ui/App.tsx                                     |    1 
+ src/ui/components/panes/ExtensionSidebarPane.tsx   |    3 
+ src/ui/components/panes/FileListItem.tsx           |   10 
+ src/ui/components/ui-components.test.tsx           |  172 ++++++++
+ src/ui/lib/files.test.ts                           |    2 
+ src/ui/lib/files.ts                                |   37 +-
+ src/ui/lib/sidebarFileTree.test.ts                 |   61 +++
+ src/ui/lib/sidebarFileTree.ts                      |  104 +++++
+ src/ui/lib/sidebarRenderWindow.test.ts             |  203 ---------
+ src/ui/lib/sidebarRenderWindow.ts                  |  172 --------
+ test/pty/nav.test.ts                               |   89 ++++
+ 19 files changed, 932 insertions(+), 527 deletions(-)
+ create mode 100644 .changeset/persistent-history-highlight.md
+ create mode 100644 .changeset/quick-file-history.md
+ create mode 100644 .changeset/unified-history-timeline.md
+ create mode 100644 src/extensions/default/ui/sidebar/historyTimeline.test.ts
+ create mode 100644 src/extensions/default/ui/sidebar/historyTimeline.ts
+ create mode 100644 src/ui/lib/sidebarFileTree.test.ts
+ create mode 100644 src/ui/lib/sidebarFileTree.ts
+ delete mode 100644 src/ui/lib/sidebarRenderWindow.test.ts
+ delete mode 100644 src/ui/lib/sidebarRenderWindow.ts
+
+diff --git a/.changeset/persistent-history-highlight.md b/.changeset/persistent-history-highlight.md
+new file mode 100644
+index 0000000..3b41cf8
+--- /dev/null
++++ b/.changeset/persistent-history-highlight.md
+@@ -0,0 +1,5 @@
++---
++"@victor-software-house/hunk": patch
++---
++
++Keep an applied History range highlighted after the review reloads.
+diff --git a/.changeset/quick-file-history.md b/.changeset/quick-file-history.md
+new file mode 100644
+index 0000000..ae5e315
+--- /dev/null
++++ b/.changeset/quick-file-history.md
+@@ -0,0 +1,5 @@
++---
++"@victor-software-house/hunk": minor
++---
++
++Add a collapsible Files tree and a bounded two-endpoint History range navigator to the built-in sidebar.
+diff --git a/.changeset/unified-history-timeline.md b/.changeset/unified-history-timeline.md
+new file mode 100644
+index 0000000..149eda0
+--- /dev/null
++++ b/.changeset/unified-history-timeline.md
+@@ -0,0 +1,5 @@
++---
++"@victor-software-house/hunk": patch
++---
++
++Show History as one ordered commit timeline with attached refs and full selected-target details.
+diff --git a/README.md b/README.md
+index ddaf6c0..f9bcb05 100644
+--- a/README.md
++++ b/README.md
+@@ -2,11 +2,11 @@
+ 
+ Hunk is a review-first terminal diff viewer for agent-authored changesets, built on [OpenTUI](https://github.com/anomalyco/opentui) and [Pierre diffs](https://www.npmjs.com/package/@pierre/diffs).
+ 
+-[![CI status](https://img.shields.io/github/actions/workflow/status/modem-dev/hunk/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/modem-dev/hunk/actions/workflows/ci.yml?branch=main)
+-[![Latest release](https://img.shields.io/github/v/release/modem-dev/hunk?style=for-the-badge)](https://github.com/modem-dev/hunk/releases)
++[![CI status](https://img.shields.io/github/actions/workflow/status/victor-software-house/hunk/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/victor-software-house/hunk/actions/workflows/ci.yml?branch=main)
++[![Latest release](https://img.shields.io/github/v/release/victor-software-house/hunk?style=for-the-badge)](https://github.com/victor-software-house/hunk/releases)
+ [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
+ 
+-- multi-file review stream with sidebar navigation
++- multi-file review stream with collapsible Files and local History navigation
+ - inline AI and agent annotations beside the code
+ - split, stack, and responsive auto layouts
+ - watch mode for auto-reloading file and Git-backed reviews
+@@ -98,17 +98,17 @@ For the full live-session and `--agent-context` workflow guide, see [docs/agent-
+ 
+ ## Feature comparison
+ 
+-| Capability                         | [hunk](https://github.com/modem-dev/hunk) | [lumen](https://github.com/jnsahaj/lumen) | [difftastic](https://github.com/Wilfred/difftastic) | [delta](https://github.com/dandavison/delta) | [diff-so-fancy](https://github.com/so-fancy/diff-so-fancy) | [diff](https://www.gnu.org/software/diffutils/) |
+-| ---------------------------------- | ----------------------------------------- | ----------------------------------------- | --------------------------------------------------- | -------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------- |
+-| Review-first interactive UI        | ✅                                        | ✅                                        | ❌                                                  | ❌                                           | ❌                                                         | ❌                                              |
+-| Multi-file review stream + sidebar | ✅                                        | ✅                                        | ❌                                                  | ❌                                           | ❌                                                         | ❌                                              |
+-| Inline agent / AI annotations      | ✅                                        | ❌                                        | ❌                                                  | ❌                                           | ❌                                                         | ❌                                              |
+-| Responsive auto split/stack layout | ✅                                        | ❌                                        | ❌                                                  | ❌                                           | ❌                                                         | ❌                                              |
+-| Mouse support inside the viewer    | ✅                                        | ✅                                        | ❌                                                  | ❌                                           | ❌                                                         | ❌                                              |
+-| Runtime view toggles               | ✅                                        | ✅                                        | ❌                                                  | ❌                                           | ❌                                                         | ❌                                              |
+-| Syntax highlighting                | ✅                                        | ✅                                        | ✅                                                  | ✅                                           | ❌                                                         | ❌                                              |
+-| Structural diffing                 | ❌                                        | ❌                                        | ✅                                                  | ❌                                           | ❌                                                         | ❌                                              |
+-| Pager-compatible mode              | ✅                                        | ❌                                        | ✅                                                  | ✅                                           | ✅                                                         | ✅                                              |
++| Capability                         | [hunk](https://github.com/victor-software-house/hunk) | [lumen](https://github.com/jnsahaj/lumen) | [difftastic](https://github.com/Wilfred/difftastic) | [delta](https://github.com/dandavison/delta) | [diff-so-fancy](https://github.com/so-fancy/diff-so-fancy) | [diff](https://www.gnu.org/software/diffutils/) |
++| ---------------------------------- | ----------------------------------------------------- | ----------------------------------------- | --------------------------------------------------- | -------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------- |
++| Review-first interactive UI        | ✅                                                    | ✅                                        | ❌                                                  | ❌                                           | ❌                                                         | ❌                                              |
++| Multi-file review stream + sidebar | ✅                                                    | ✅                                        | ❌                                                  | ❌                                           | ❌                                                         | ❌                                              |
++| Inline agent / AI annotations      | ✅                                                    | ❌                                        | ❌                                                  | ❌                                           | ❌                                                         | ❌                                              |
++| Responsive auto split/stack layout | ✅                                                    | ❌                                        | ❌                                                  | ❌                                           | ❌                                                         | ❌                                              |
++| Mouse support inside the viewer    | ✅                                                    | ✅                                        | ❌                                                  | ❌                                           | ❌                                                         | ❌                                              |
++| Runtime view toggles               | ✅                                                    | ✅                                        | ❌                                                  | ❌                                           | ❌                                                         | ❌                                              |
++| Syntax highlighting                | ✅                                                    | ✅                                        | ✅                                                  | ✅                                           | ❌                                                         | ❌                                              |
++| Structural diffing                 | ❌                                                    | ❌                                        | ✅                                                  | ❌                                           | ❌                                                         | ❌                                              |
++| Pager-compatible mode              | ✅                                                    | ❌                                        | ✅                                                  | ✅                                           | ✅                                                         | ✅                                              |
+ 
+ Hunk is optimized for reviewing a full changeset interactively.
+ 
+diff --git a/src/extension-api/types.ts b/src/extension-api/types.ts
+index 8f21dec..43f5e9c 100644
+--- a/src/extension-api/types.ts
++++ b/src/extension-api/types.ts
+@@ -896,6 +896,8 @@ export interface ExtensionSidebarKeybindings {
+ 
+ /** Everything a custom sidebar component receives, refreshed as the app changes. */
+ export interface ExtensionSidebarViewProps {
++  /** Whether this review tab currently owns process keyboard input. */
++  readonly active?: boolean;
+   /**
+    * The reviewed files currently visible, in review-stream order.
+    *
+diff --git a/src/extensions/default/ui/sidebar/historyTimeline.test.ts b/src/extensions/default/ui/sidebar/historyTimeline.test.ts
+new file mode 100644
+index 0000000..37438cd
+--- /dev/null
++++ b/src/extensions/default/ui/sidebar/historyTimeline.test.ts
+@@ -0,0 +1,62 @@
++import { describe, expect, test } from "bun:test";
++import type { ExtensionReviewHistory } from "../../../../extension-api/types";
++import { buildHistoryTimeline } from "./historyTimeline";
++
++const FIRST = "a".repeat(40);
++const SECOND = "b".repeat(40);
++
++function history(): ExtensionReviewHistory {
++  return {
++    commits: [
++      {
++        id: SECOND,
++        parentIds: [FIRST],
++        subject: "second subject",
++        committedAt: "2026-08-09T01:00:00.000Z",
++      },
++      {
++        id: FIRST,
++        parentIds: [],
++        subject: "first subject",
++        committedAt: "2026-08-08T01:00:00.000Z",
++      },
++    ],
++    refs: [
++      { name: "origin/main", kind: "remote", commitId: SECOND },
++      { name: "v2", kind: "tag", commitId: SECOND },
++      { name: "main", kind: "branch", commitId: SECOND, current: true },
++      { name: "feature/very-long-history-name", kind: "branch", commitId: FIRST },
++      { name: "v1", kind: "tag", commitId: FIRST },
++      { name: "outside-window", kind: "branch", commitId: "c".repeat(40) },
++    ],
++  };
++}
++
++describe("buildHistoryTimeline", () => {
++  test("keeps commit topology and attaches refs to their target commit", () => {
++    const rows = buildHistoryTimeline(history());
++
++    expect(rows.map((row) => row.target)).toEqual([SECOND, FIRST]);
++    expect(rows[0]).toMatchObject({
++      subject: "second subject",
++      compactRef: "* main +2",
++      refDetail: "branch main · remote origin/main · tag v2",
++    });
++    expect(rows[1]).toMatchObject({
++      subject: "first subject",
++      compactRef: "b feature/very-long-history-name +1",
++      refDetail: "branch feature/very-long-history-name · tag v1",
++    });
++  });
++
++  test("deduplicates identical ref records and omits refs outside the bounded commits", () => {
++    const input = history();
++    input.refs = [...input.refs, input.refs[2]!];
++
++    const rows = buildHistoryTimeline(input);
++    expect(rows[0]!.refs).toHaveLength(3);
++    expect(rows.flatMap((row) => row.refs).some((ref) => ref.name === "outside-window")).toBe(
++      false,
++    );
++  });
++});
+diff --git a/src/extensions/default/ui/sidebar/historyTimeline.ts b/src/extensions/default/ui/sidebar/historyTimeline.ts
+new file mode 100644
+index 0000000..f2b4cef
+--- /dev/null
++++ b/src/extensions/default/ui/sidebar/historyTimeline.ts
+@@ -0,0 +1,59 @@
++import type {
++  ExtensionReviewHistory,
++  ExtensionReviewHistoryRef,
++} from "../../../../extension-api/types";
++
++const REF_KIND_ORDER = { branch: 0, remote: 1, tag: 2 } as const;
++const REF_KIND_LABEL = { branch: "branch", remote: "remote", tag: "tag" } as const;
++const REF_KIND_MARKER = { branch: "b", remote: "r", tag: "t" } as const;
++
++export interface HistoryTimelineRow {
++  key: string;
++  target: string;
++  shortId: string;
++  subject: string;
++  refs: readonly ExtensionReviewHistoryRef[];
++  compactRef: string;
++  refDetail: string;
++}
++
++/** Order attached refs by operator relevance rather than Git's global ref date order. */
++function compareRefs(left: ExtensionReviewHistoryRef, right: ExtensionReviewHistoryRef) {
++  if (Boolean(left.current) !== Boolean(right.current)) return left.current ? -1 : 1;
++  const kindDifference = REF_KIND_ORDER[left.kind] - REF_KIND_ORDER[right.kind];
++  return kindDifference || left.name.localeCompare(right.name);
++}
++
++/** Build one topological commit timeline with branch, remote, and tag aliases attached. */
++export function buildHistoryTimeline(history: ExtensionReviewHistory | null): HistoryTimelineRow[] {
++  if (!history) return [];
++
++  const refsByCommit = new Map<string, ExtensionReviewHistoryRef[]>();
++  const seenRefs = new Set<string>();
++  const commitIds = new Set(history.commits.map((commit) => commit.id));
++  for (const ref of history.refs) {
++    const key = `${ref.kind}\0${ref.name}\0${ref.commitId}`;
++    if (seenRefs.has(key) || !commitIds.has(ref.commitId)) continue;
++    seenRefs.add(key);
++    const refs = refsByCommit.get(ref.commitId) ?? [];
++    refs.push(ref);
++    refsByCommit.set(ref.commitId, refs);
++  }
++
++  return history.commits.map((commit) => {
++    const refs = (refsByCommit.get(commit.id) ?? []).sort(compareRefs);
++    const primary = refs[0];
++    const compactRef = primary
++      ? `${primary.current ? "*" : REF_KIND_MARKER[primary.kind]} ${primary.name}${refs.length > 1 ? ` +${refs.length - 1}` : ""}`
++      : "";
++    return {
++      key: `commit:${commit.id}`,
++      target: commit.id,
++      shortId: commit.id.slice(0, 7),
++      subject: commit.subject,
++      refs,
++      compactRef,
++      refDetail: refs.map((ref) => `${REF_KIND_LABEL[ref.kind]} ${ref.name}`).join(" · "),
++    };
++  });
++}
+diff --git a/src/extensions/default/ui/sidebar/index.tsx b/src/extensions/default/ui/sidebar/index.tsx
+index 2cdff6c..777337d 100644
+--- a/src/extensions/default/ui/sidebar/index.tsx
++++ b/src/extensions/default/ui/sidebar/index.tsx
+@@ -1,14 +1,12 @@
+-import type { ScrollBoxRenderable } from "@opentui/core";
+-import { useTerminalDimensions } from "@opentui/react";
++import type { KeyEvent, ScrollBoxRenderable } from "@opentui/core";
++import { useKeyboard } from "@opentui/react";
+ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+-import type { ExtensionSidebarViewProps } from "../../../../extension-api/types";
+-import {
+-  buildSidebarEntries,
+-  sidebarEntryStatsWidth,
+-  type SidebarEntry,
+-} from "../../../../ui/lib/files";
+-import { fileRowId } from "../../../../ui/lib/ids";
+-import { buildSidebarRenderWindow } from "../../../../ui/lib/sidebarRenderWindow";
++import type {
++  ExtensionReviewHistory,
++  ExtensionSidebarViewProps,
++} from "../../../../extension-api/types";
++import { sidebarEntryStatsWidth } from "../../../../ui/lib/files";
++import { wrapText } from "../../../../ui/lib/agentPopover";
+ import { FileGroupHeader, FileListItem } from "../../../../ui/components/panes/FileListItem";
+ import { HUNK_VENDOR_EXTENSION_ID } from "../../../extensionIds";
+ import { runExtensionFactory } from "../../../runExtension";
+@@ -18,6 +16,9 @@ import {
+   type ExtensionLoadIssue,
+   type RegisteredSidebarView,
+ } from "../../../types";
++import { buildSidebarFileTree } from "../../../../ui/lib/sidebarFileTree";
++import { fitText, measureTextWidth } from "../../../../ui/lib/text";
++import { buildHistoryTimeline } from "./historyTimeline";
+ 
+ /**
+  * Hunk's file-navigation sidebar, shipped as a bundled extension.
+@@ -59,142 +60,348 @@ export const BUNDLED_SIDEBAR_EXTENSION_ID = HUNK_VENDOR_EXTENSION_ID;
+ export const BUNDLED_SIDEBAR_VIEW_ID = "files";
+ 
+ /** Render the built-in file navigation sidebar from the public sidebar props. */
+-export function BuiltInSidebarView({
++export function BuiltInSidebarNavigator({
++  active = true,
+   files,
+   selectedFileId,
+   theme,
+   width,
+   actions,
+-}: ExtensionSidebarViewProps): ReactNode {
++  review,
++  initialTab = "files",
++}: ExtensionSidebarViewProps & { initialTab?: "files" | "history" }): ReactNode {
+   const scrollRef = useRef<ScrollBoxRenderable | null>(null);
+-  const [scrollViewport, setScrollViewport] = useState({ top: 0, height: 0 });
+-  const terminal = useTerminalDimensions();
++  const [collapsedPaths, setCollapsedPaths] = useState<ReadonlySet<string>>(() => new Set());
+   // Mirrors the host layout: one column of row highlight plus row padding.
+   const textWidth = Math.max(8, width - 2);
+-  const entries = useMemo<SidebarEntry[]>(() => buildSidebarEntries(files), [files]);
++  const tree = useMemo(() => buildSidebarFileTree(files, collapsedPaths), [collapsedPaths, files]);
++  const entries = tree.entries;
+   const fileEntries = entries.filter((entry) => entry.kind === "file");
+   const statsWidth = Math.max(0, ...fileEntries.map((entry) => sidebarEntryStatsWidth(entry)));
+-  const renderWindow = useMemo(
+-    () =>
+-      buildSidebarRenderWindow({
+-        entries,
+-        estimatedViewportRows: terminal.height,
+-        overscanRows: 4,
+-        scrollTop: scrollViewport.top,
+-        selectedFileId: selectedFileId ?? undefined,
+-        viewportHeight: scrollViewport.height,
+-      }),
+-    [entries, terminal.height, scrollViewport.height, scrollViewport.top, selectedFileId],
++
++  const [activeTab, setActiveTab] = useState<"files" | "history">(initialTab);
++  const [history, setHistory] = useState<ExtensionReviewHistory | null>(null);
++  const [historyError, setHistoryError] = useState<string | null>(null);
++  const [historyLoading, setHistoryLoading] = useState(false);
++  const [historyIndex, setHistoryIndex] = useState(0);
++  const [rangeBase, setRangeBase] = useState<string | null>(null);
++  const [appliedRange, setAppliedRange] = useState<{ base: string; head: string } | null>(null);
++
++  const historyRows = useMemo(() => buildHistoryTimeline(history), [history]);
++  const selectedHistoryRow = historyRows[historyIndex] ?? null;
++  const historyInstruction = rangeBase
++    ? "↑↓ head · Enter apply · R cancel"
++    : "Enter/click base · Esc files";
++  const historyInstructionLines = useMemo(
++    () => wrapText(historyInstruction, textWidth),
++    [historyInstruction, textWidth],
+   );
++  const selectedHistoryDetail = useMemo(() => {
++    if (!selectedHistoryRow) return [];
++    const rowText = `${selectedHistoryRow.shortId}${selectedHistoryRow.compactRef ? ` ${selectedHistoryRow.compactRef}` : ""} ${selectedHistoryRow.subject}`;
++    if (!selectedHistoryRow.refDetail && measureTextWidth(rowText) + 2 <= textWidth) return [];
++    const detail = [`${selectedHistoryRow.shortId} ${selectedHistoryRow.subject}`];
++    if (selectedHistoryRow.refDetail) detail.push(`refs ${selectedHistoryRow.refDetail}`);
++    return detail.flatMap((line) => wrapText(line, textWidth));
++  }, [selectedHistoryRow, textWidth]);
++  const rangeBaseIndex = rangeBase ? historyRows.findIndex((row) => row.target === rangeBase) : -1;
++  const appliedBaseIndex = appliedRange
++    ? historyRows.findIndex((row) => row.target === appliedRange.base)
++    : -1;
++  const appliedHeadIndex = appliedRange
++    ? historyRows.findIndex((row) => row.target === appliedRange.head)
++    : -1;
+ 
+   useEffect(() => {
+-    const scrollBox = scrollRef.current;
+-    if (!scrollBox) {
++    if (activeTab !== "history" || historyLoading || history || historyError) return;
++    setHistoryLoading(true);
++    void review.loadHistory().then((result) => {
++      setHistoryLoading(false);
++      if (result.ok) {
++        setHistory(result.history);
++        setHistoryIndex(0);
++      } else {
++        setHistoryError(result.detail);
++      }
++    });
++  }, [activeTab, history, historyError, historyLoading, review]);
++
++  const chooseHistoryTarget = async (target: string) => {
++    if (!rangeBase) {
++      setRangeBase(target);
++      actions.notify(`Range base: ${target}`);
+       return;
+     }
++    const range = `${rangeBase}...${target}`;
++    const result = await review.setRange(range);
++    if (!result.ok) actions.notify(result.detail, "warning");
++    else setAppliedRange({ base: rangeBase, head: target });
++    setRangeBase(null);
++  };
+ 
+-    let cancelled = false;
+-    let scheduled = false;
+-
+-    const readViewport = () => {
+-      const nextTop = scrollBox.scrollTop ?? 0;
+-      const nextHeight = scrollBox.viewport.height ?? 0;
+-      setScrollViewport((current) =>
+-        current.top === nextTop && current.height === nextHeight
+-          ? current
+-          : { top: nextTop, height: nextHeight },
++  useKeyboard((key: KeyEvent) => {
++    if (!active || key.defaultPrevented) return;
++    const isRangeKey =
++      key.name === "R" || (key.name.toLowerCase() === "r" && key.shift) || key.sequence === "R";
++    if (isRangeKey) {
++      key.preventDefault();
++      key.stopPropagation();
++      setActiveTab("history");
++      setRangeBase(null);
++      return;
++    }
++    if (activeTab !== "history") return;
++    if (key.name === "escape") {
++      key.preventDefault();
++      key.stopPropagation();
++      setActiveTab("files");
++      return;
++    }
++    if (key.name === "up" || key.name === "down") {
++      key.preventDefault();
++      key.stopPropagation();
++      const delta = key.name === "up" ? -1 : 1;
++      setHistoryIndex((current) =>
++        historyRows.length === 0 ? 0 : (current + delta + historyRows.length) % historyRows.length,
+       );
+-    };
++      return;
++    }
++    if (key.name === "return" || key.name === "enter") {
++      const target = historyRows[historyIndex]?.target;
++      if (!target) return;
++      key.preventDefault();
++      key.stopPropagation();
++      void chooseHistoryTarget(target);
++    }
++  });
+ 
+-    const handleViewportChange = () => {
+-      if (scheduled) {
+-        return;
+-      }
+-      scheduled = true;
++  // A selected file is never allowed to remain hidden under a collapsed ancestor.
++  useEffect(() => {
++    if (!selectedFileId) return;
++    const ancestors = tree.ancestorsByFileId.get(selectedFileId);
++    if (!ancestors?.some((path) => collapsedPaths.has(path))) return;
++    setCollapsedPaths((current) => {
++      const next = new Set(current);
++      for (const path of ancestors) next.delete(path);
++      return next;
++    });
++  }, [collapsedPaths, selectedFileId, tree.ancestorsByFileId]);
++
++  const toggleDirectory = (path: string) => {
++    setCollapsedPaths((current) => {
++      const next = new Set(current);
++      if (next.has(path)) next.delete(path);
++      else next.add(path);
++      return next;
++    });
++  };
++
++  // All lightweight file-tree rows stay mounted; OpenTUI owns viewport culling.
++  // Reveal after OpenTUI has calculated final child geometry, not merely after
++  // React committed the row nodes.
++  useEffect(() => {
++    if (!selectedFileId) return;
++    const scrollBox = scrollRef.current;
++    if (!scrollBox) return;
++    const selectedIndex = entries.findIndex(
++      (entry) => entry.kind === "file" && entry.id === selectedFileId,
++    );
++    if (selectedIndex < 0) return;
++
++    let cancelled = false;
++    const reveal = () => {
+       queueMicrotask(() => {
+-        if (cancelled) {
+-          scheduled = false;
+-          return;
+-        }
+-
+-        try {
+-          readViewport();
+-        } finally {
+-          scheduled = false;
+-        }
++        if (cancelled) return;
++        const height = Math.max(1, scrollBox.viewport.height);
++        const top = scrollBox.scrollTop;
++        if (selectedIndex < top) scrollBox.scrollTop = selectedIndex;
++        else if (selectedIndex >= top + height) scrollBox.scrollTop = selectedIndex - height + 1;
+       });
+     };
+-
+-    readViewport();
+-    scrollBox.verticalScrollBar.on("change", handleViewportChange);
+-    scrollBox.viewport.on("layout-changed", handleViewportChange);
+-    scrollBox.viewport.on("resized", handleViewportChange);
+-
++    reveal();
++    scrollBox.viewport.on("layout-changed", reveal);
++    scrollBox.viewport.on("resized", reveal);
+     return () => {
+       cancelled = true;
+-      scrollBox.verticalScrollBar.off("change", handleViewportChange);
+-      scrollBox.viewport.off("layout-changed", handleViewportChange);
+-      scrollBox.viewport.off("resized", handleViewportChange);
++      scrollBox.viewport.off("layout-changed", reveal);
++      scrollBox.viewport.off("resized", reveal);
+     };
+-  }, [entries.length]);
+-
+-  // Keep the selected file's row visible as navigation moves the selection —
+-  // behavior the sidebar owns, so every sidebar (custom ones included) decides
+-  // its own follow policy instead of the host scrolling a pane it cannot see.
+-  useEffect(() => {
+-    if (!selectedFileId) {
+-      return;
+-    }
+-
+-    scrollRef.current?.scrollChildIntoView(fileRowId(selectedFileId));
+-  }, [selectedFileId]);
++  }, [entries, selectedFileId]);
+ 
+   return (
+-    <scrollbox
+-      ref={scrollRef}
+-      width="100%"
+-      height="100%"
+-      focused={false}
+-      scrollY={true}
+-      viewportCulling={true}
+-      rootOptions={{ backgroundColor: theme.panel }}
+-      wrapperOptions={{ backgroundColor: theme.panel }}
+-      viewportOptions={{ backgroundColor: theme.panel }}
+-      contentOptions={{ backgroundColor: theme.panel }}
+-      verticalScrollbarOptions={{ visible: false }}
+-      horizontalScrollbarOptions={{ visible: false }}
+-    >
+-      <box style={{ width: "100%", flexDirection: "column" }}>
+-        {renderWindow.items.map((item) => {
+-          if (item.kind === "spacer") {
+-            return (
+-              <box
+-                key={item.key}
+-                style={{ width: "100%", height: item.height, backgroundColor: theme.panel }}
+-              />
+-            );
+-          }
+-
+-          const { entry } = item;
+-          return entry.kind === "group" ? (
+-            <FileGroupHeader key={entry.id} entry={entry} textWidth={textWidth} theme={theme} />
+-          ) : (
+-            <FileListItem
+-              key={entry.id}
+-              entry={entry}
+-              selected={entry.id === selectedFileId}
+-              statsWidth={statsWidth}
+-              textWidth={textWidth}
+-              theme={theme}
+-              onSelectFile={actions.selectFile}
+-            />
+-          );
+-        })}
++    <box style={{ width: "100%", height: "100%", flexDirection: "column" }}>
++      <box style={{ width: "100%", height: 1, flexDirection: "row", backgroundColor: theme.panel }}>
++        <box
++          style={{
++            width: 8,
++            height: 1,
++            paddingLeft: 1,
++            backgroundColor: activeTab === "files" ? theme.panelAlt : theme.panel,
++          }}
++          onMouseUp={() => setActiveTab("files")}
++        >
++          <text fg={activeTab === "files" ? theme.accent : theme.muted}>Files</text>
++        </box>
++        <box
++          style={{
++            width: 10,
++            height: 1,
++            paddingLeft: 1,
++            backgroundColor: activeTab === "history" ? theme.panelAlt : theme.panel,
++          }}
++          onMouseUp={() => setActiveTab("history")}
++        >
++          <text fg={activeTab === "history" ? theme.accent : theme.muted}>History</text>
++        </box>
+       </box>
+-    </scrollbox>
++      {activeTab === "files" ? (
++        <scrollbox
++          ref={scrollRef}
++          width="100%"
++          height="100%"
++          focused={false}
++          scrollY={true}
++          viewportCulling={true}
++          rootOptions={{ backgroundColor: theme.panel }}
++          wrapperOptions={{ backgroundColor: theme.panel }}
++          viewportOptions={{ backgroundColor: theme.panel }}
++          contentOptions={{ backgroundColor: theme.panel }}
++          verticalScrollbarOptions={{ visible: false }}
++          horizontalScrollbarOptions={{ visible: false }}
++        >
++          <box style={{ width: "100%", flexDirection: "column" }}>
++            {entries.map((entry) => {
++              const depth = entry.depth ?? 0;
++              return entry.kind === "group" ? (
++                <FileGroupHeader
++                  key={entry.id}
++                  entry={entry}
++                  paddingLeft={1 + depth * 2}
++                  textWidth={Math.max(1, textWidth - depth * 2)}
++                  theme={theme}
++                  onToggle={toggleDirectory}
++                />
++              ) : (
++                <FileListItem
++                  key={entry.id}
++                  entry={entry}
++                  selected={entry.id === selectedFileId}
++                  statsWidth={statsWidth}
++                  paddingLeft={1 + depth * 2}
++                  textWidth={Math.max(1, textWidth - depth * 2)}
++                  theme={theme}
++                  onSelectFile={actions.selectFile}
++                />
++              );
++            })}
++          </box>
++        </scrollbox>
++      ) : (
++        <box style={{ width: "100%", height: "100%", flexDirection: "column" }}>
++          {historyInstructionLines.map((line, index) => (
++            <text key={`history-instruction:${index}`} fg={theme.muted}>
++              {line}
++            </text>
++          ))}
++          {historyLoading ? <text fg={theme.muted}>Loading history…</text> : null}
++          {historyError ? (
++            <text fg={theme.badgeRemoved}>{fitText(historyError, textWidth)}</text>
++          ) : null}
++          <box style={{ position: "relative", width: "100%", flexGrow: 1 }}>
++            <scrollbox
++              width="100%"
++              height="100%"
++              scrollY={true}
++              viewportCulling={true}
++              rootOptions={{ backgroundColor: theme.panel }}
++              wrapperOptions={{ backgroundColor: theme.panel }}
++              viewportOptions={{ backgroundColor: theme.panel }}
++              contentOptions={{ backgroundColor: theme.panel, flexDirection: "column" }}
++              verticalScrollbarOptions={{ visible: false }}
++              horizontalScrollbarOptions={{ visible: false }}
++            >
++              {historyRows.map((row, index) => {
++                const current = index === historyIndex;
++                const previewStart = Math.min(rangeBaseIndex, historyIndex);
++                const previewEnd = Math.max(rangeBaseIndex, historyIndex);
++                const previewed =
++                  rangeBaseIndex >= 0 && index >= previewStart && index <= previewEnd;
++                const appliedStart = Math.min(appliedBaseIndex, appliedHeadIndex);
++                const appliedEnd = Math.max(appliedBaseIndex, appliedHeadIndex);
++                const applied =
++                  appliedBaseIndex >= 0 &&
++                  appliedHeadIndex >= 0 &&
++                  index >= appliedStart &&
++                  index <= appliedEnd;
++                // A new preview temporarily supersedes the applied interval. Cancelling
++                // or failing restores the last range because appliedRange is unchanged.
++                const highlighted = rangeBaseIndex >= 0 ? previewed : applied;
++                const base = index === (rangeBaseIndex >= 0 ? rangeBaseIndex : appliedBaseIndex);
++                const head = index === (rangeBaseIndex >= 0 ? historyIndex : appliedHeadIndex);
++                const marker = base ? "B" : head ? "H" : highlighted ? "│" : current ? "›" : " ";
++                return (
++                  <box
++                    key={row.key}
++                    style={{
++                      width: "100%",
++                      height: 1,
++                      paddingLeft: 1,
++                      backgroundColor: highlighted
++                        ? theme.selectedHunk
++                        : current
++                          ? theme.panelAlt
++                          : theme.panel,
++                    }}
++                    onMouseOver={() => setHistoryIndex(index)}
++                    onMouseUp={() => {
++                      setHistoryIndex(index);
++                      void chooseHistoryTarget(row.target);
++                    }}
++                  >
++                    <text fg={base || head ? theme.accent : current ? theme.text : theme.muted}>
++                      {fitText(
++                        `${marker} ${row.shortId}${row.compactRef ? ` ${row.compactRef}` : ""} ${row.subject}`,
++                        textWidth,
++                      )}
++                    </text>
++                  </box>
++                );
++              })}
++            </scrollbox>
++          </box>
++          {selectedHistoryDetail.length > 0 ? (
++            <box
++              style={{
++                width: "100%",
++                height: selectedHistoryDetail.length,
++                minHeight: selectedHistoryDetail.length,
++                flexShrink: 0,
++                flexDirection: "column",
++                paddingLeft: 1,
++                backgroundColor: theme.panelAlt,
++              }}
++            >
++              {selectedHistoryDetail.map((line, index) => (
++                <text
++                  key={`${selectedHistoryRow?.key}:detail:${index}`}
++                  fg={index === 0 ? theme.text : theme.muted}
++                >
++                  {line}
++                </text>
++              ))}
++            </box>
++          ) : null}
++        </box>
++      )}
++    </box>
+   );
+ }
+ 
++/** Public-props wrapper registered as Hunk's bundled sidebar view. */
++export function BuiltInSidebarView(props: ExtensionSidebarViewProps): ReactNode {
++  return <BuiltInSidebarNavigator {...props} />;
++}
++
+ /** The factory the bundled sidebar registers through, same as any extension. */
+ const registerBundledSidebar: ExtensionFactory = (hunk) => {
+   hunk.registerSidebarView({ id: BUNDLED_SIDEBAR_VIEW_ID, component: BuiltInSidebarView });
+diff --git a/src/ui/App.tsx b/src/ui/App.tsx
+index 0e8da0a..33f977e 100644
+--- a/src/ui/App.tsx
++++ b/src/ui/App.tsx
+@@ -2029,6 +2029,7 @@ export function App({
+     const paneSelection = getExtensionSelection();
+     return (
+       <ExtensionSidebarPane
++        active={active}
+         registered={pane.view.registered}
+         files={filteredFiles}
+         fileViews={getExtensionFileViews()}
+diff --git a/src/ui/components/panes/ExtensionSidebarPane.tsx b/src/ui/components/panes/ExtensionSidebarPane.tsx
+index 7b38c27..c234e32 100644
+--- a/src/ui/components/panes/ExtensionSidebarPane.tsx
++++ b/src/ui/components/panes/ExtensionSidebarPane.tsx
+@@ -83,6 +83,7 @@ class ExtensionSidebarErrorBoundary extends Component<
+  * is what keeps them sufficient for third-party sidebars.
+  */
+ export function ExtensionSidebarPane({
++  active = true,
+   registered,
+   files,
+   fileViews,
+@@ -98,6 +99,7 @@ export function ExtensionSidebarPane({
+   onSelectHunk,
+   onRenderFailure,
+ }: {
++  active?: boolean;
+   registered: RegisteredSidebarView;
+   /**
+    * The visible review-stream files, already filtered like the built-in
+@@ -159,6 +161,7 @@ export function ExtensionSidebarPane({
+   const View = registered.view.component as (props: ExtensionSidebarViewProps) => ReactNode;
+ 
+   const viewProps: ExtensionSidebarViewProps = {
++    active,
+     files: fileViews,
+     selectedFileId,
+     selectedHunkIndex,
+diff --git a/src/ui/components/panes/FileListItem.tsx b/src/ui/components/panes/FileListItem.tsx
+index 9e8ae6e..3027dc0 100644
+--- a/src/ui/components/panes/FileListItem.tsx
++++ b/src/ui/components/panes/FileListItem.tsx
+@@ -41,12 +41,15 @@ export function FileGroupHeader({
+   paddingLeft = 1,
+   textWidth,
+   theme,
++  onToggle,
+ }: {
+   entry: FileGroupEntry;
+   paddingLeft?: number;
+   textWidth: number;
+   theme: ExtensionSidebarTheme;
++  onToggle?: (path: string) => void;
+ }) {
++  const indicator = onToggle ? (entry.collapsed ? "▸ " : "▾ ") : "";
+   return (
+     <box
+       style={{
+@@ -55,8 +58,9 @@ export function FileGroupHeader({
+         paddingLeft,
+         backgroundColor: theme.panel,
+       }}
++      onMouseUp={() => entry.path && onToggle?.(entry.path)}
+     >
+-      <text fg={theme.muted}>{fitText(entry.label, Math.max(1, textWidth))}</text>
++      <text fg={theme.muted}>{fitText(`${indicator}${entry.label}`, Math.max(1, textWidth))}</text>
+     </box>
+   );
+ }
+@@ -83,7 +87,9 @@ export const FileListItem = memo(function FileListItem({
+   const stats = sidebarEntryStats(entry);
+   const { icon, color } = getFileStateIcon(entry, theme);
+   const iconWidth = icon ? 2 : 0; // icon + space
+-  const statsSectionWidth = statsWidth > 0 ? statsWidth + 1 : 0;
++  const maximumStatsWidth = Math.max(0, textWidth - 1 - iconWidth - 8);
++  const visibleStatsWidth = Math.min(statsWidth, maximumStatsWidth);
++  const statsSectionWidth = visibleStatsWidth > 0 ? visibleStatsWidth + 1 : 0;
+   const nameWidth = Math.max(1, textWidth - 1 - iconWidth - statsSectionWidth);
+ 
+   return (
+diff --git a/src/ui/components/ui-components.test.tsx b/src/ui/components/ui-components.test.tsx
+index 5749e7c..8b2e398 100644
+--- a/src/ui/components/ui-components.test.tsx
++++ b/src/ui/components/ui-components.test.tsx
+@@ -20,7 +20,8 @@ import { resolveCommandKeys } from "../lib/keymap";
+ 
+ const { AppHost } = await import("../AppHost");
+ const { toReadOnlyFileViews } = await import("../../extensions/events");
+-const { BuiltInSidebarView } = await import("../../extensions/default/ui/sidebar");
++const { BuiltInSidebarNavigator, BuiltInSidebarView } =
++  await import("../../extensions/default/ui/sidebar");
+ const { HelpDialog } = await import("./chrome/HelpDialog");
+ const { AgentCard } = await import("./panes/AgentCard");
+ const { AgentInlineNote, measureAgentInlineNoteHeight } = await import("./panes/AgentInlineNote");
+@@ -470,13 +471,13 @@ describe("UI components", () => {
+       12,
+     );
+ 
+-    expect(frame).toContain("src/ui/");
+-    expect(frame).toContain("src/core/");
+-    expect(frame).toContain("./");
++    expect(frame).toContain("▾ src/");
++    expect(frame).toContain("▾ ui/");
++    expect(frame).toContain("▾ core/");
+     expect(frame).toContain(" zzz-root.ts");
+-    expect(frame.indexOf("src/ui/")).toBeLessThan(frame.indexOf("./"));
++    expect(frame.indexOf("▾ src/")).toBeLessThan(frame.indexOf("zzz-root.ts"));
+     expect(frame).toContain(" App.tsx");
+-    expect(frame).toContain(" MenuDropdown.tsx");
++    expect(frame).toContain(" MenuDropdow");
+     expect(frame).toContain(" watch.ts");
+     expect(frame).toContain("*1 +2 -1");
+     expect(frame).toContain("+5");
+@@ -486,6 +487,165 @@ describe("UI components", () => {
+     expect(frame).not.toContain("M +2 -1 AI");
+   });
+ 
++  test("the bundled sidebar keeps the viewport populated for a distant selection", async () => {
++    const theme = resolveTheme("github-dark-default", null);
++    const files = Array.from({ length: 100 }, (_, index) => {
++      const suffix = String(index).padStart(3, "0");
++      return createTestDiffFile(
++        `file-${suffix}`,
++        `file-${suffix}.ts`,
++        `export const value = ${index};\n`,
++        `export const value = ${index + 1};\n`,
++      );
++    });
++    const setup = await testRender(
++      <BuiltInSidebarView
++        files={toReadOnlyFileViews(files)}
++        selectedFileId="file-070"
++        selectedHunkIndex={0}
++        theme={theme}
++        width={30}
++        keybindings={{ matches: () => false, getKeys: () => [] }}
++        review={{
++          range: { available: true },
++          setRange: async () => ({ ok: true }),
++          loadHistory: async () => ({ ok: true, history: { commits: [], refs: [] } }),
++        }}
++        actions={{ selectFile: () => {}, selectHunk: () => {}, notify: () => {} }}
++      />,
++      { width: 36, height: 12 },
++    );
++
++    try {
++      for (let frame = 0; frame < 4; frame += 1) {
++        await act(async () => {
++          await setup.renderOnce();
++          await Bun.sleep(20);
++        });
++      }
++      const frame = setup.captureCharFrame();
++      expect(frame).toContain("file-000.ts");
++      expect(frame).toContain("file-001.ts");
++    } finally {
++      await act(async () => setup.renderer.destroy());
++    }
++  });
++
++  test("the bundled navigator keeps the applied History range highlighted", async () => {
++    const theme = resolveTheme("github-dark-default", null);
++    const ranges: string[] = [];
++    const notices: Array<{ message: string; type?: "info" | "warning" | "error" }> = [];
++    const mainCommit = "a".repeat(40);
++    const middleCommit = "b".repeat(40);
++    const featureCommit = "c".repeat(40);
++    const setup = await testRender(
++      <BuiltInSidebarNavigator
++        initialTab="history"
++        files={toReadOnlyFileViews([createTestDiffFile("app", "src/App.tsx", "a\n", "b\n")])}
++        selectedFileId="app"
++        selectedHunkIndex={0}
++        theme={theme}
++        width={34}
++        keybindings={{ matches: () => false, getKeys: () => [] }}
++        review={{
++          range: { available: true },
++          setRange: async (range) => {
++            ranges.push(range);
++            return ranges.length === 1
++              ? { ok: true }
++              : { ok: false, reason: "failed", detail: "replacement failed" };
++          },
++          loadHistory: async () => ({
++            ok: true,
++            history: {
++              refs: [
++                { name: "main", kind: "branch", commitId: mainCommit, current: true },
++                { name: "origin/release/long-name", kind: "remote", commitId: mainCommit },
++                { name: "middle", kind: "branch", commitId: middleCommit },
++                { name: "feature", kind: "branch", commitId: featureCommit },
++              ],
++              commits: [
++                {
++                  id: mainCommit,
++                  parentIds: [middleCommit],
++                  subject: "main commit",
++                  committedAt: "2026-08-09T03:00:00.000Z",
++                },
++                {
++                  id: middleCommit,
++                  parentIds: [featureCommit],
++                  subject: "middle commit",
++                  committedAt: "2026-08-09T02:00:00.000Z",
++                },
++                {
++                  id: featureCommit,
++                  parentIds: [],
++                  subject: "feature commit",
++                  committedAt: "2026-08-09T01:00:00.000Z",
++                },
++              ],
++            },
++          }),
++        }}
++        actions={{
++          selectFile: () => {},
++          selectHunk: () => {},
++          notify: (message, type) => notices.push({ message, type }),
++        }}
++      />,
++      { width: 40, height: 12 },
++    );
++
++    const render = async () => {
++      await act(async () => {
++        await setup.renderOnce();
++        await Bun.sleep(0);
++      });
++      return setup.captureCharFrame();
++    };
++
++    try {
++      for (let frame = 0; frame < 3; frame += 1) await render();
++      expect(await render()).toContain("origin/release/long-name");
++
++      await act(async () => setup.mockInput.pressEnter());
++      await act(async () => setup.mockInput.pressArrow("down"));
++      await act(async () => setup.mockInput.pressArrow("down"));
++      let frame = await render();
++      expect(frame).toContain("B aaaaaaa * main +1");
++      expect(frame).toContain("│ bbbbbbb b middle");
++      expect(frame).toContain("H ccccccc b feature");
++
++      await act(async () => setup.mockInput.pressEnter());
++      frame = await render();
++      expect(ranges).toEqual([`${mainCommit}...${featureCommit}`]);
++      expect(frame).toContain("B aaaaaaa * main +1");
++      expect(frame).toContain("│ bbbbbbb b middle");
++      expect(frame).toContain("H ccccccc b feature");
++
++      await act(async () => setup.mockInput.pressKey("R"));
++      frame = await render();
++      expect(frame).toContain("B aaaaaaa * main +1");
++      expect(frame).toContain("│ bbbbbbb b middle");
++      expect(frame).toContain("H ccccccc b feature");
++
++      await act(async () => setup.mockInput.pressEnter());
++      await act(async () => setup.mockInput.pressArrow("up"));
++      await act(async () => setup.mockInput.pressEnter());
++      frame = await render();
++      expect(ranges).toEqual([
++        `${mainCommit}...${featureCommit}`,
++        `${featureCommit}...${middleCommit}`,
++      ]);
++      expect(notices).toContainEqual({ message: "replacement failed", type: "warning" });
++      expect(frame).toContain("B aaaaaaa * main +1");
++      expect(frame).toContain("│ bbbbbbb b middle");
++      expect(frame).toContain("H ccccccc b feature");
++    } finally {
++      await act(async () => setup.renderer.destroy());
++    }
++  });
++
+   test("DiffPane renders all diff sections in file order", async () => {
+     const bootstrap = createBootstrap();
+     const theme = resolveTheme("github-dark-default", null);
+diff --git a/src/ui/lib/files.test.ts b/src/ui/lib/files.test.ts
+index 6e821c2..40ab7bc 100644
+--- a/src/ui/lib/files.test.ts
++++ b/src/ui/lib/files.test.ts
+@@ -151,7 +151,7 @@ describe("files helpers", () => {
+       stateLabel: null,
+     });
+     expect(buildSidebarEntries([file])).toEqual([
+-      { kind: "group", id: "group:src:0", label: "src/" },
++      { kind: "group", id: "group:src:0", path: "src", label: "src/" },
+       expect.objectContaining({ kind: "file", name: "tab\\tname.ts" }),
+     ]);
+   });
+diff --git a/src/ui/lib/files.ts b/src/ui/lib/files.ts
+index 2799cf0..f365f22 100644
+--- a/src/ui/lib/files.ts
++++ b/src/ui/lib/files.ts
+@@ -8,7 +8,9 @@ import { formatTerminalPath } from "../../lib/terminalText";
+ export interface FileListEntry {
+   kind: "file";
+   id: string;
++  path?: string;
+   name: string;
++  depth?: number;
+   agentCommentsText: string | null;
+   additionsText: string | null;
+   deletionsText: string | null;
+@@ -40,7 +42,10 @@ export interface SidebarFileSource {
+ export interface FileGroupEntry {
+   kind: "group";
+   id: string;
++  path?: string;
+   label: string;
++  depth?: number;
++  collapsed?: boolean;
+ }
+ 
+ export type SidebarEntry = FileListEntry | FileGroupEntry;
+@@ -99,6 +104,24 @@ export function sidebarEntryStatsWidth(
+   );
+ }
+ 
++/** Build one file row shared by grouped and tree sidebar layouts. */
++export function buildSidebarFileEntry(file: SidebarFileSource, depth?: number): FileListEntry {
++  const path = formatTerminalPath(normalizeDiffPath(file.path) ?? file.path);
++  const agentCommentCount = file.agent?.annotations.length ?? 0;
++  return {
++    kind: "file",
++    id: file.id,
++    path,
++    name: sidebarFileName(file),
++    ...(depth === undefined ? {} : { depth }),
++    agentCommentsText: agentCommentCount > 0 ? `*${agentCommentCount}` : null,
++    additionsText: formatSidebarStat("+", file.stats.additions, file.statsTruncated),
++    deletionsText: formatSidebarStat("-", file.stats.deletions),
++    changeType: file.changeType ?? readMetadataChangeType(file.metadata) ?? "change",
++    isUntracked: file.isUntracked ?? false,
++  };
++}
++
+ /** Merge one file-id keyed annotation map into the review stream file list. */
+ export function mergeFileAnnotationsByFileId<T extends AgentAnnotation>(
+   files: DiffFile[],
+@@ -155,22 +178,12 @@ export function buildSidebarEntries(files: readonly SidebarFileSource[]): Sideba
+       entries.push({
+         kind: "group",
+         id: `group:${group}:${index}`,
++        path: group,
+         label: group === "." ? "./" : `${group}/`,
+       });
+     }
+ 
+-    const agentCommentCount = file.agent?.annotations.length ?? 0;
+-
+-    entries.push({
+-      kind: "file",
+-      id: file.id,
+-      name: sidebarFileName(file),
+-      agentCommentsText: agentCommentCount > 0 ? `*${agentCommentCount}` : null,
+-      additionsText: formatSidebarStat("+", file.stats.additions, file.statsTruncated),
+-      deletionsText: formatSidebarStat("-", file.stats.deletions),
+-      changeType: file.changeType ?? readMetadataChangeType(file.metadata) ?? "change",
+-      isUntracked: file.isUntracked ?? false,
+-    });
++    entries.push(buildSidebarFileEntry(file));
+   });
+ 
+   return entries;
+diff --git a/src/ui/lib/sidebarFileTree.test.ts b/src/ui/lib/sidebarFileTree.test.ts
+new file mode 100644
+index 0000000..829a0ca
+--- /dev/null
++++ b/src/ui/lib/sidebarFileTree.test.ts
+@@ -0,0 +1,61 @@
++import { describe, expect, test } from "bun:test";
++import { buildSidebarFileTree } from "./sidebarFileTree";
++
++function file(id: string, path: string) {
++  return {
++    id,
++    path,
++    stats: { additions: 1, deletions: 0 },
++    changeType: "change" as const,
++  };
++}
++
++describe("buildSidebarFileTree", () => {
++  test("folds single-child directories and preserves first-seen file order", () => {
++    const tree = buildSidebarFileTree([
++      file("deep", "src/ui/components/App.tsx"),
++      file("sibling", "src/ui/theme.ts"),
++      file("root", "README.md"),
++    ]);
++
++    expect(
++      tree.entries.map((entry) => [
++        entry.kind,
++        entry.kind === "group" ? entry.label : entry.name,
++        entry.depth,
++      ]),
++    ).toEqual([
++      ["group", "src/ui/", 0],
++      ["group", "components/", 1],
++      ["file", "App.tsx", 2],
++      ["file", "theme.ts", 1],
++      ["file", "README.md", 0],
++    ]);
++    expect(tree.ancestorsByFileId.get("deep")).toEqual(["src", "src/ui", "src/ui/components"]);
++  });
++
++  test("collapses one folded directory without disturbing sibling rows", () => {
++    const tree = buildSidebarFileTree(
++      [file("deep", "src/ui/App.tsx"), file("test", "test/App.test.ts"), file("root", "README.md")],
++      new Set(["src/ui"]),
++    );
++
++    expect(
++      tree.entries.map((entry) => [entry.kind, entry.kind === "group" ? entry.label : entry.name]),
++    ).toEqual([
++      ["group", "src/ui/"],
++      ["group", "test/"],
++      ["file", "App.test.ts"],
++      ["file", "README.md"],
++    ]);
++    expect(tree.entries[0]).toMatchObject({ path: "src/ui", collapsed: true });
++  });
++
++  test("keeps root files name-first without a redundant dot group", () => {
++    const tree = buildSidebarFileTree([file("a", "a.ts"), file("b", "b.ts")]);
++    expect(tree.entries.map((entry) => entry.kind === "file" && entry.name)).toEqual([
++      "a.ts",
++      "b.ts",
++    ]);
++  });
++});
+diff --git a/src/ui/lib/sidebarFileTree.ts b/src/ui/lib/sidebarFileTree.ts
+new file mode 100644
+index 0000000..0f96d7d
+--- /dev/null
++++ b/src/ui/lib/sidebarFileTree.ts
+@@ -0,0 +1,104 @@
++import { normalizeDiffPath } from "../../core/diffPaths";
++import { formatTerminalPath } from "../../lib/terminalText";
++import { buildSidebarFileEntry, type SidebarEntry, type SidebarFileSource } from "./files";
++
++interface DirectoryNode {
++  path: string;
++  segment: string;
++  items: Array<
++    { kind: "directory"; node: DirectoryNode } | { kind: "file"; file: SidebarFileSource }
++  >;
++  directories: Map<string, DirectoryNode>;
++}
++
++function createDirectory(path: string, segment: string): DirectoryNode {
++  return { path, segment, items: [], directories: new Map() };
++}
++
++/** Build one first-seen-order path trie and each file's directory ancestry. */
++function buildTree(files: readonly SidebarFileSource[]) {
++  const root = createDirectory(".", ".");
++  const ancestorsByFileId = new Map<string, string[]>();
++
++  for (const file of files) {
++    const normalized = formatTerminalPath(normalizeDiffPath(file.path) ?? file.path);
++    const parts = normalized.split("/").filter(Boolean);
++    const directories = parts.slice(0, -1);
++    const ancestors: string[] = [];
++    let node = root;
++
++    for (const segment of directories) {
++      let child = node.directories.get(segment);
++      if (!child) {
++        const path = node.path === "." ? segment : `${node.path}/${segment}`;
++        child = createDirectory(path, segment);
++        node.directories.set(segment, child);
++        node.items.push({ kind: "directory", node: child });
++      }
++      node = child;
++      ancestors.push(node.path);
++    }
++
++    node.items.push({ kind: "file", file });
++    ancestorsByFileId.set(file.id, ancestors);
++  }
++
++  return { root, ancestorsByFileId };
++}
++
++/** Fold directory chains that contain no direct files or sibling directories. */
++function foldedDirectory(node: DirectoryNode) {
++  const segments = [node.segment];
++  let leaf = node;
++  while (leaf.items.length === 1 && leaf.items[0]?.kind === "directory") {
++    leaf = leaf.items[0].node;
++    segments.push(leaf.segment);
++  }
++  return { leaf, label: `${segments.join("/")}/` };
++}
++
++function flattenDirectory(
++  node: DirectoryNode,
++  depth: number,
++  collapsedPaths: ReadonlySet<string>,
++  entries: SidebarEntry[],
++) {
++  const folded = foldedDirectory(node);
++  const collapsed = collapsedPaths.has(folded.leaf.path);
++  entries.push({
++    kind: "group",
++    id: `tree:${folded.leaf.path}`,
++    path: folded.leaf.path,
++    label: folded.label,
++    depth,
++    collapsed,
++  });
++  if (collapsed) return;
++
++  for (const item of folded.leaf.items) {
++    if (item.kind === "directory") {
++      flattenDirectory(item.node, depth + 1, collapsedPaths, entries);
++    } else {
++      entries.push(buildSidebarFileEntry(item.file, depth + 1));
++    }
++  }
++}
++
++/** Build collapsible, folded file-tree rows while preserving first-seen order. */
++export function buildSidebarFileTree(
++  files: readonly SidebarFileSource[],
++  collapsedPaths: ReadonlySet<string> = new Set(),
++) {
++  const { root, ancestorsByFileId } = buildTree(files);
++  const entries: SidebarEntry[] = [];
++
++  for (const item of root.items) {
++    if (item.kind === "directory") {
++      flattenDirectory(item.node, 0, collapsedPaths, entries);
++    } else {
++      entries.push(buildSidebarFileEntry(item.file, 0));
++    }
++  }
++
++  return { entries, ancestorsByFileId };
++}
+diff --git a/src/ui/lib/sidebarRenderWindow.test.ts b/src/ui/lib/sidebarRenderWindow.test.ts
+deleted file mode 100644
+index bf79529..0000000
+--- a/src/ui/lib/sidebarRenderWindow.test.ts
++++ /dev/null
+@@ -1,203 +0,0 @@
+-import { describe, expect, test } from "bun:test";
+-import type { SidebarEntry } from "./files";
+-import { buildSidebarRenderWindow, type SidebarRenderWindowItem } from "./sidebarRenderWindow";
+-
+-/** Build fixed-height sidebar rows with occasional group headers. */
+-function createEntries(ids: string[]): SidebarEntry[] {
+-  return ids.map((id) =>
+-    id.startsWith("group:")
+-      ? { kind: "group", id, label: `${id.slice("group:".length)}/` }
+-      : {
+-          kind: "file",
+-          id,
+-          name: `${id}.ts`,
+-          agentCommentsText: null,
+-          additionsText: null,
+-          deletionsText: null,
+-          changeType: "change",
+-          isUntracked: false,
+-        },
+-  );
+-}
+-
+-/** Sum mounted row and spacer heights from a sidebar render-window plan. */
+-function renderedHeight(items: SidebarRenderWindowItem[]) {
+-  return items.reduce((total, item) => total + (item.kind === "spacer" ? item.height : 1), 0);
+-}
+-
+-/** Return a compact item shape for assertions. */
+-function itemSummary(items: SidebarRenderWindowItem[]) {
+-  return items.map((item) =>
+-    item.kind === "spacer"
+-      ? {
+-          kind: "spacer",
+-          height: item.height,
+-          startIndex: item.startIndex,
+-          endIndex: item.endIndex,
+-        }
+-      : { kind: "entry", entryIndex: item.entryIndex, id: item.entry.id },
+-  );
+-}
+-
+-describe("buildSidebarRenderWindow", () => {
+-  test("returns an empty plan when there are no rows", () => {
+-    const plan = buildSidebarRenderWindow({ entries: [], scrollTop: 0, viewportHeight: 10 });
+-
+-    expect(plan.items).toEqual([]);
+-    expect(plan.mountedEntryIndices).toEqual([]);
+-    expect(plan.visibleStartIndex).toBeNull();
+-    expect(plan.visibleEndIndex).toBeNull();
+-    expect(plan.topSpacerHeight).toBe(0);
+-    expect(plan.bottomSpacerHeight).toBe(0);
+-  });
+-
+-  test("mounts the first viewport and reserves the rest in a bottom spacer", () => {
+-    const entries = createEntries(["file-0", "file-1", "file-2", "file-3", "file-4"]);
+-    const plan = buildSidebarRenderWindow({
+-      entries,
+-      overscanRows: 0,
+-      scrollTop: 0,
+-      viewportHeight: 3,
+-    });
+-
+-    expect(plan.mountedEntryIndices).toEqual([0, 1, 2]);
+-    expect(plan.visibleStartIndex).toBe(0);
+-    expect(plan.visibleEndIndex).toBe(2);
+-    expect(plan.topSpacerHeight).toBe(0);
+-    expect(plan.bottomSpacerHeight).toBe(2);
+-    expect(itemSummary(plan.items)).toEqual([
+-      { kind: "entry", entryIndex: 0, id: "file-0" },
+-      { kind: "entry", entryIndex: 1, id: "file-1" },
+-      { kind: "entry", entryIndex: 2, id: "file-2" },
+-      { kind: "spacer", height: 2, startIndex: 3, endIndex: 4 },
+-    ]);
+-    expect(renderedHeight(plan.items)).toBe(entries.length);
+-  });
+-
+-  test("clamps overscan at the last viewport", () => {
+-    const entries = createEntries(["file-0", "file-1", "file-2", "file-3", "file-4"]);
+-    const plan = buildSidebarRenderWindow({
+-      entries,
+-      overscanRows: 1,
+-      scrollTop: 3,
+-      viewportHeight: 2,
+-    });
+-
+-    expect(plan.mountedEntryIndices).toEqual([2, 3, 4]);
+-    expect(plan.visibleStartIndex).toBe(3);
+-    expect(plan.visibleEndIndex).toBe(4);
+-    expect(plan.topSpacerHeight).toBe(2);
+-    expect(plan.bottomSpacerHeight).toBe(0);
+-    expect(itemSummary(plan.items)).toEqual([
+-      { kind: "spacer", height: 2, startIndex: 0, endIndex: 1 },
+-      { kind: "entry", entryIndex: 2, id: "file-2" },
+-      { kind: "entry", entryIndex: 3, id: "file-3" },
+-      { kind: "entry", entryIndex: 4, id: "file-4" },
+-    ]);
+-    expect(renderedHeight(plan.items)).toBe(entries.length);
+-  });
+-
+-  test("adds row-level overscan around the visible range", () => {
+-    const entries = createEntries(["file-0", "file-1", "file-2", "file-3", "file-4", "file-5"]);
+-    const plan = buildSidebarRenderWindow({
+-      entries,
+-      overscanRows: 2,
+-      scrollTop: 2,
+-      viewportHeight: 1,
+-    });
+-
+-    expect(plan.visibleStartIndex).toBe(2);
+-    expect(plan.visibleEndIndex).toBe(2);
+-    expect(plan.mountedEntryIndices).toEqual([0, 1, 2, 3, 4]);
+-    expect(plan.bottomSpacerHeight).toBe(1);
+-    expect(renderedHeight(plan.items)).toBe(entries.length);
+-  });
+-
+-  test("keeps a selected file outside the viewport mounted as a sparse island", () => {
+-    const entries = createEntries(["file-0", "file-1", "file-2", "file-3", "file-4"]);
+-    const plan = buildSidebarRenderWindow({
+-      entries,
+-      overscanRows: 0,
+-      scrollTop: 0,
+-      selectedFileId: "file-4",
+-      viewportHeight: 2,
+-    });
+-
+-    expect(plan.mountedEntryIndices).toEqual([0, 1, 4]);
+-    expect(itemSummary(plan.items)).toEqual([
+-      { kind: "entry", entryIndex: 0, id: "file-0" },
+-      { kind: "entry", entryIndex: 1, id: "file-1" },
+-      { kind: "spacer", height: 2, startIndex: 2, endIndex: 3 },
+-      { kind: "entry", entryIndex: 4, id: "file-4" },
+-    ]);
+-    expect(renderedHeight(plan.items)).toBe(entries.length);
+-  });
+-
+-  test("uses the filtered entry list and ignores a selected file that is filtered out", () => {
+-    const entries = createEntries(["group:src", "file-1", "file-3"]);
+-    const plan = buildSidebarRenderWindow({
+-      entries,
+-      overscanRows: 0,
+-      scrollTop: 0,
+-      selectedFileId: "file-9",
+-      viewportHeight: 2,
+-    });
+-
+-    expect(plan.mountedEntryIndices).toEqual([0, 1]);
+-    expect(itemSummary(plan.items)).toEqual([
+-      { kind: "entry", entryIndex: 0, id: "group:src" },
+-      { kind: "entry", entryIndex: 1, id: "file-1" },
+-      { kind: "spacer", height: 1, startIndex: 2, endIndex: 2 },
+-    ]);
+-    expect(renderedHeight(plan.items)).toBe(entries.length);
+-  });
+-
+-  test("preserves sparse islands and spacers around group and file rows", () => {
+-    const entries = createEntries([
+-      "group:src",
+-      "file-0",
+-      "file-1",
+-      "group:test",
+-      "file-2",
+-      "file-3",
+-      "file-4",
+-    ]);
+-    const plan = buildSidebarRenderWindow({
+-      entries,
+-      overscanRows: 0,
+-      scrollTop: 1,
+-      selectedFileId: "file-4",
+-      viewportHeight: 1,
+-    });
+-
+-    expect(plan.mountedEntryIndices).toEqual([1, 6]);
+-    expect(itemSummary(plan.items)).toEqual([
+-      { kind: "spacer", height: 1, startIndex: 0, endIndex: 0 },
+-      { kind: "entry", entryIndex: 1, id: "file-0" },
+-      { kind: "spacer", height: 4, startIndex: 2, endIndex: 5 },
+-      { kind: "entry", entryIndex: 6, id: "file-4" },
+-    ]);
+-    expect(plan.topSpacerHeight).toBe(1);
+-    expect(renderedHeight(plan.items)).toBe(entries.length);
+-  });
+-
+-  test("preserves total height as one spacer when the viewport is beyond the rows", () => {
+-    const entries = createEntries(["file-0", "file-1"]);
+-    const plan = buildSidebarRenderWindow({
+-      entries,
+-      overscanRows: 0,
+-      scrollTop: 99,
+-      viewportHeight: 10,
+-    });
+-
+-    expect(plan.mountedEntryIndices).toEqual([]);
+-    expect(plan.visibleStartIndex).toBeNull();
+-    expect(plan.visibleEndIndex).toBeNull();
+-    expect(itemSummary(plan.items)).toEqual([
+-      { kind: "spacer", height: 2, startIndex: 0, endIndex: 1 },
+-    ]);
+-    expect(plan.topSpacerHeight).toBe(2);
+-    expect(plan.bottomSpacerHeight).toBe(2);
+-    expect(renderedHeight(plan.items)).toBe(entries.length);
+-  });
+-});
+diff --git a/src/ui/lib/sidebarRenderWindow.ts b/src/ui/lib/sidebarRenderWindow.ts
+deleted file mode 100644
+index 25ef570..0000000
+--- a/src/ui/lib/sidebarRenderWindow.ts
++++ /dev/null
+@@ -1,172 +0,0 @@
+-import type { SidebarEntry } from "./files";
+-
+-export const SIDEBAR_ROW_HEIGHT = 1;
+-
+-export interface SidebarRenderWindowEntryItem {
+-  kind: "entry";
+-  entry: SidebarEntry;
+-  entryIndex: number;
+-}
+-
+-export interface SidebarRenderWindowSpacerItem {
+-  kind: "spacer";
+-  key: string;
+-  height: number;
+-  startIndex: number;
+-  endIndex: number;
+-}
+-
+-export type SidebarRenderWindowItem = SidebarRenderWindowEntryItem | SidebarRenderWindowSpacerItem;
+-
+-export interface SidebarRenderWindowPlan {
+-  items: SidebarRenderWindowItem[];
+-  mountedEntryIndices: number[];
+-  visibleStartIndex: number | null;
+-  visibleEndIndex: number | null;
+-  topSpacerHeight: number;
+-  bottomSpacerHeight: number;
+-}
+-
+-/** Return the inclusive fixed-row range that intersects the current sidebar viewport. */
+-function findVisibleEntryRange(entryCount: number, scrollTop: number, viewportHeight: number) {
+-  if (entryCount === 0 || viewportHeight <= 0) {
+-    return null;
+-  }
+-
+-  const minY = Math.max(0, scrollTop);
+-  const maxY = minY + Math.max(0, viewportHeight);
+-  const totalHeight = entryCount * SIDEBAR_ROW_HEIGHT;
+-
+-  if (minY >= totalHeight || maxY <= 0) {
+-    return null;
+-  }
+-
+-  const startIndex = Math.min(entryCount - 1, Math.max(0, Math.floor(minY / SIDEBAR_ROW_HEIGHT)));
+-  const endIndex = Math.min(
+-    entryCount - 1,
+-    Math.max(startIndex, Math.ceil(maxY / SIDEBAR_ROW_HEIGHT) - 1),
+-  );
+-
+-  return { startIndex, endIndex };
+-}
+-
+-/** Add an inclusive fixed-row index range to the mounted sidebar set. */
+-function addEntryIndexRange(
+-  indices: Set<number>,
+-  startIndex: number,
+-  endIndex: number,
+-  count: number,
+-) {
+-  const start = Math.max(0, startIndex);
+-  const end = Math.min(count - 1, endIndex);
+-
+-  for (let index = start; index <= end; index += 1) {
+-    indices.add(index);
+-  }
+-}
+-
+-/** Return exact spacer height for an inclusive fixed-row index range. */
+-function entryRangeHeight(startIndex: number, endIndex: number) {
+-  return startIndex > endIndex ? 0 : (endIndex - startIndex + 1) * SIDEBAR_ROW_HEIGHT;
+-}
+-
+-/** Build a sparse sidebar render plan that preserves exact scroll height with spacers. */
+-export function buildSidebarRenderWindow({
+-  entries,
+-  estimatedViewportRows = 32,
+-  overscanRows = 4,
+-  scrollTop,
+-  selectedFileId,
+-  viewportHeight,
+-}: {
+-  entries: SidebarEntry[];
+-  estimatedViewportRows?: number;
+-  overscanRows?: number;
+-  scrollTop: number;
+-  selectedFileId?: string;
+-  viewportHeight: number;
+-}): SidebarRenderWindowPlan {
+-  const mountedIndices = new Set<number>();
+-  const effectiveViewportHeight =
+-    viewportHeight > 0 ? viewportHeight : Math.max(0, Math.floor(estimatedViewportRows));
+-  const visibleRange = findVisibleEntryRange(entries.length, scrollTop, effectiveViewportHeight);
+-  const clampedOverscanRows = Math.max(0, Math.floor(overscanRows));
+-
+-  if (visibleRange) {
+-    addEntryIndexRange(
+-      mountedIndices,
+-      visibleRange.startIndex - clampedOverscanRows,
+-      visibleRange.endIndex + clampedOverscanRows,
+-      entries.length,
+-    );
+-  }
+-
+-  if (selectedFileId) {
+-    const selectedIndex = entries.findIndex(
+-      (entry) => entry.kind === "file" && entry.id === selectedFileId,
+-    );
+-    if (selectedIndex >= 0) {
+-      mountedIndices.add(selectedIndex);
+-    }
+-  }
+-
+-  const mountedEntryIndices = Array.from(mountedIndices).sort((left, right) => left - right);
+-  const items: SidebarRenderWindowItem[] = [];
+-  let cursor = 0;
+-  let topSpacerHeight = 0;
+-  let bottomSpacerHeight = 0;
+-
+-  const pushSpacer = (startIndex: number, endIndex: number) => {
+-    const height = entryRangeHeight(startIndex, endIndex);
+-    if (height <= 0) {
+-      return;
+-    }
+-
+-    const item: SidebarRenderWindowSpacerItem = {
+-      kind: "spacer",
+-      key: `sidebar-spacer:${startIndex}:${endIndex}`,
+-      height,
+-      startIndex,
+-      endIndex,
+-    };
+-    if (startIndex === 0) {
+-      topSpacerHeight += height;
+-    }
+-    if (endIndex === entries.length - 1) {
+-      bottomSpacerHeight += height;
+-    }
+-    items.push(item);
+-  };
+-
+-  for (const index of mountedEntryIndices) {
+-    if (index > cursor) {
+-      pushSpacer(cursor, index - 1);
+-    }
+-
+-    const entry = entries[index];
+-    if (entry) {
+-      items.push({ kind: "entry", entry, entryIndex: index });
+-    }
+-    cursor = index + 1;
+-  }
+-
+-  if (cursor < entries.length) {
+-    pushSpacer(cursor, entries.length - 1);
+-  }
+-
+-  // With no mounted rows, one spacer represents the full sidebar extent.
+-  if (mountedEntryIndices.length === 0 && entries.length > 0) {
+-    const fullHeight = entryRangeHeight(0, entries.length - 1);
+-    topSpacerHeight = fullHeight;
+-    bottomSpacerHeight = fullHeight;
+-  }
+-
+-  return {
+-    items,
+-    mountedEntryIndices,
+-    visibleStartIndex: visibleRange?.startIndex ?? null,
+-    visibleEndIndex: visibleRange?.endIndex ?? null,
+-    topSpacerHeight,
+-    bottomSpacerHeight,
+-  };
+-}
+diff --git a/test/pty/nav.test.ts b/test/pty/nav.test.ts
+index b310d30..03a719c 100644
+--- a/test/pty/nav.test.ts
++++ b/test/pty/nav.test.ts
+@@ -1,3 +1,6 @@
++import { execFileSync } from "node:child_process";
++import { writeFileSync } from "node:fs";
++import { join } from "node:path";
+ import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+ import { createPtyHarness } from "./harness";
+ 
+@@ -88,7 +91,7 @@ describe("PTY navigation", () => {
+     const session = await harness.launchHunk({
+       args: ["diff", "--mode", "split"],
+       cwd: fixture.dir,
+-      cols: 120,
++      cols: 220,
+       rows: 16,
+     });
+ 
+@@ -96,6 +99,7 @@ describe("PTY navigation", () => {
+       await session.waitForText(/View\s+Navigate\s+Agent\s+Help/, {
+         timeout: 15_000,
+       });
++      await harness.ensureKeyboardIsLive(session);
+ 
+       // The fixture has 18 long-file hunks followed by two short-file hunks.
+       // Navigate by that semantic count: the larger tabbed viewport can render
+@@ -165,6 +169,89 @@ describe("PTY navigation", () => {
+     }
+   });
+ 
++  test("R opens the bundled history range flow without replacing the review stream", async () => {
++    const fixture = harness.createSidebarJumpRepoFixture();
++    const session = await harness.launchHunk({
++      args: ["diff", "--mode", "split"],
++      cwd: fixture.dir,
++      cols: 220,
++      rows: 16,
++    });
++
++    try {
++      const initial = await session.waitForText(/Files\s+History/, { timeout: 15_000 });
++      expect(initial).toContain("alpha.ts");
++
++      await session.type("R");
++      const history = await session.waitForText(/[0-9a-f]{7} initial/, { timeout: 5_000 });
++      expect(history).toContain("History");
++      expect(history).toContain("Enter/click base");
++      expect(history).toContain("refs branch");
++      expect(history).toContain("alpha.ts");
++
++      await session.press("escape");
++      const files = await session.waitForText(/alpha\.ts/, { timeout: 5_000 });
++      expect(files).not.toContain("Enter/click base");
++    } finally {
++      session.close();
++    }
++  });
++
++  test("an applied History range stays highlighted after the review reload", async () => {
++    const fixture = harness.createSidebarJumpRepoFixture();
++    execFileSync("git", ["add", "."], { cwd: fixture.dir });
++    execFileSync("git", ["commit", "-m", "latest"], { cwd: fixture.dir, stdio: "ignore" });
++    writeFileSync(join(fixture.dir, "alpha.ts"), "export const alphaValue = 3;\n");
++    const session = await harness.launchHunk({
++      args: ["diff", "--mode", "split"],
++      cwd: fixture.dir,
++      cols: 220,
++      rows: 18,
++    });
++
++    try {
++      await session.waitForText(/Files\s+History/, { timeout: 15_000 });
++      await harness.ensureKeyboardIsLive(session);
++      await session.type("R");
++      const history = await session.waitForText(/([0-9a-f]{7}) initial/, { timeout: 5_000 });
++      const initial = history.match(/([0-9a-f]{7}) initial/)?.[1];
++      const latest = history.match(/([0-9a-f]{7}) \* ([^\s]+) latest/)?.[1];
++      const currentBranch = history.match(/([0-9a-f]{7}) \* ([^\s]+) latest/)?.[2];
++      expect(initial).toBeDefined();
++      expect(latest).toBeDefined();
++      expect(currentBranch).toBeDefined();
++      expect(history).toContain(`refs branch ${currentBranch}`);
++
++      await session.press("down");
++      await session.press("enter");
++      await session.press("up");
++
++      const preview = await harness.waitForSnapshot(
++        session,
++        (text) =>
++          text.includes(`H ${latest} * ${currentBranch} latest`) &&
++          text.includes(`B ${initial} initial`),
++        5_000,
++      );
++      expect(preview).toContain(`H ${latest} * ${currentBranch} latest`);
++      expect(preview).toContain(`B ${initial} initial`);
++
++      await session.press("enter");
++      const applied = await harness.waitForSnapshot(
++        session,
++        (text) =>
++          text.includes("Enter/click base") &&
++          text.includes(`H ${latest} * ${currentBranch} latest`) &&
++          text.includes(`B ${initial} initial`),
++        10_000,
++      );
++      expect(applied).toContain(`H ${latest} * ${currentBranch} latest`);
++      expect(applied).toContain(`B ${initial} initial`);
++    } finally {
++      session.close();
++    }
++  });
++
+   test("sidebar selection jumps the main pane without collapsing the review stream", async () => {
+     const fixture = harness.createSidebarJumpRepoFixture();
+     const session = await harness.launchHunk({
