@@ -32,7 +32,7 @@ function navigateExamples(kind: "absolute" | "relative") {
 const FRONTMATTER = [
   "---",
   "name: hunk-review",
-  "description: Interacts with live Hunk diff review sessions via CLI. Inspects review focus, navigates files and hunks, reloads session contents, and adds inline review comments. Use when the user has a Hunk session running or wants to review diffs interactively.",
+  "description: Interacts with live Hunk diff review sessions via CLI. Inspects review focus, navigates files and hunks, reloads session contents, manages independent project review tabs, and adds inline review comments. Use when the user has a Hunk session running or wants to review diffs interactively.",
   "---",
 ];
 
@@ -54,9 +54,10 @@ const WORKFLOW = [
   "4. hunk session review --repo . --include-patch --json  # opt into raw diff text only when needed",
   "5. hunk session context --repo .                        # check current focus when needed",
   "6. hunk session navigate ...                            # move to the right place",
-  "7. hunk session reload -- <command>                     # swap contents if needed",
-  "8. hunk session comment add ...                         # leave one review note",
-  "9. hunk session comment apply ...                       # apply many agent notes in one stdin batch",
+  "7. hunk session reload -- <command>                     # swap active-tab contents if needed",
+  "8. hunk session tab add ... -- <command>                # mount another independent project review",
+  "9. hunk session comment add ...                         # leave one review note",
+  "10. hunk session comment apply ...                      # apply many agent notes in one stdin batch",
   "```",
 ];
 
@@ -69,12 +70,12 @@ const SESSION_SELECTION = [
   "- `<session-id>` -- match by exact ID (use when multiple sessions share a repo)",
   "- If only one session exists, it auto-resolves",
   "",
-  "`reload` also supports:",
+  "`reload` and tab mutations also support:",
   "",
-  "- `--session-path <path>` -- match the live Hunk window by its current working directory",
-  "- `--source <path>` -- load the replacement `diff` / `show` command from a different directory",
+  "- `--session-path <path>` -- match the live Hunk process by its launch/current working directory",
+  "- `--source <path>` -- load replacement or new-tab content from a separate project directory",
   "",
-  "Use `--source` only for advanced reloads where the live session you want to control is not already associated with the checkout you want to load next. For a normal worktree session, prefer selecting it directly with `--repo /path/to/worktree`.",
+  "Use `--source` only when the live process and content checkout genuinely differ. For normal worktree sessions, prefer selecting directly with `--repo /path/to/worktree`.",
 ];
 
 const INSPECT_SECTION = [
@@ -107,9 +108,9 @@ const NAVIGATE_SECTION = [
 ];
 
 const RELOAD_SECTION = [
-  "### Reload",
+  "### Reload the active tab",
   "",
-  "Swaps the live session's contents. Pass a Hunk review command after `--`:",
+  "Swaps only the active tab's contents. Pass a Hunk review command after `--`; other mounted project reviews remain independent:",
   "",
   ...bashFence(synopsisLines(commands.reload)),
   "",
@@ -122,6 +123,27 @@ const RELOAD_SECTION = [
   "- `--source` is advanced: it does not select the session; it only changes where the replacement review command runs",
   "- If the live session is already showing the target worktree, prefer `hunk session reload --repo /path/to/worktree -- diff`",
   "- `--session-path` targets the live window when you need to keep session selection separate from reload source",
+];
+
+const TABS_SECTION = [
+  "### Review tabs",
+  "",
+  "One Hunk process can keep independent named project reviews mounted. Create a tab with its project directory and full review command after `--`; target later mutations by stable tab id or unique name:",
+  "",
+  ...bashFence(
+    synopsisLines(
+      commands["tab-add"],
+      commands["tab-select"],
+      commands["tab-rename"],
+      commands["tab-close"],
+    ),
+  ),
+  "",
+  "- `tab add` activates the new tab and accepts the same `diff` / `show` review syntax as a normal launch",
+  "- `--source` is the new tab's project directory; the outer selector still identifies the existing Hunk process",
+  "- `--tab` resolves a stable tab id first, then a unique normalized name",
+  "- Ordinary navigate, reload, and comment commands continue to target only the active tab",
+  "- In the TUI, `Ctrl+T` opens the new-review dialog and the tab strip sits below the top menu",
 ];
 
 const COMMENTS_SECTION = [
@@ -216,6 +238,7 @@ export function renderHunkReviewSkill() {
     INSPECT_SECTION,
     NAVIGATE_SECTION,
     RELOAD_SECTION,
+    TABS_SECTION,
     COMMENTS_SECTION,
     STML_SECTION,
     NEW_FILES_SECTION,
