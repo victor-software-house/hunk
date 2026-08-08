@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.0-beta.3
+
+### Patch Changes
+
+- Execute Bun publication with the repository registry config and initialize exact-version smoke workspaces ([`c57c4e9`](https://github.com/victor-software-house/hunk/commit/c57c4e97e6bd9f0469b396f6b8d9e33c54836a05)).
+
 ## 0.18.0-beta.2
 
 ### Patch Changes
