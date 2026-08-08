@@ -1,35 +1,5 @@
 # Changelog
 
-## 0.18.0-beta.1
-
-### Minor Changes
-
-- [#1](https://github.com/victor-software-house/hunk/pull/1) [`7f8bc42`](https://github.com/victor-software-house/hunk/commit/7f8bc425860386959e72afc5e809fd41cc14f3e3) - Let extensions inspect and replace the current VCS review range through Hunk's bounded reload path.
-
-- [#1](https://github.com/victor-software-house/hunk/pull/1) [`7f8bc42`](https://github.com/victor-software-house/hunk/commit/7f8bc425860386959e72afc5e809fd41cc14f3e3) - Add named multi-project review tabs with TUI project/range creation and agent tab controls.
-
-- [#662](https://github.com/modem-dev/hunk/pull/662) [`5150d21`](https://github.com/victor-software-house/hunk/commit/5150d211babd504a05219891d40b5f9ac78fd80f) - Highlight the current line and move it with `j`/`k`, so `c` adds a note exactly where the cursor sits. Set `cursor_line` to `number` for a quieter line-number marker, or `off` to restore plain row scrolling.
-
-- [#675](https://github.com/modem-dev/hunk/pull/675) [`efa2203`](https://github.com/victor-software-house/hunk/commit/efa2203f86845e1da5849ae64fe7cd50ceeba06e) - Extension file views can register an opt-in keyboard mode that routes keys to the view ahead of the command table, with Escape always exiting.
-
-- [#673](https://github.com/modem-dev/hunk/pull/673) [`378ec4b`](https://github.com/victor-software-house/hunk/commit/378ec4b3f7043dcd8ceecec2d22041a71e7bf8b1) - Extension file views can now refresh their prepared layouts with `fileViews.refresh`, letting stateful views redraw without a file or width change.
-
-- [#1](https://github.com/victor-software-house/hunk/pull/1) [`7f8bc42`](https://github.com/victor-software-house/hunk/commit/7f8bc425860386959e72afc5e809fd41cc14f3e3) - Add a collapsible Files tree and a bounded two-endpoint History range navigator to the built-in sidebar.
-
-- [#674](https://github.com/modem-dev/hunk/pull/674) [`4a656c7`](https://github.com/victor-software-house/hunk/commit/4a656c7dc11117ce75f40147f73a06958f011a0f) - Extension commands gain `ctx.workspace`, a host-mediated way to read reviewed documents and — with the user's confirmation — write reviewed files back to the working tree.
-
-### Patch Changes
-
-- [#669](https://github.com/modem-dev/hunk/pull/669) [`ab570a0`](https://github.com/victor-software-house/hunk/commit/ab570a006e54b34140210523d8edd1d9519dc491) - Preserve syntax highlighting state in source-backed reviews when visible hunks begin inside folded multiline constructs.
-
-- [#675](https://github.com/modem-dev/hunk/pull/675) [`efa2203`](https://github.com/victor-software-house/hunk/commit/efa2203f86845e1da5849ae64fe7cd50ceeba06e) - Match `ctrl+<letter>` key chords against the bare control character the combination is sent as, so those bindings also fire for key events that reach the matcher undecoded.
-
-- [#668](https://github.com/modem-dev/hunk/pull/668) [`5230cc5`](https://github.com/victor-software-house/hunk/commit/5230cc56a81655d3a86e9f54a4536a38ad269705) - Keep file stats visible and use three-dot path truncation on narrow terminals.
-
-- [#1](https://github.com/victor-software-house/hunk/pull/1) [`7f8bc42`](https://github.com/victor-software-house/hunk/commit/7f8bc425860386959e72afc5e809fd41cc14f3e3) - Publish the VSH fork through GitHub Packages with scoped macOS arm64 and Linux x64 binaries.
-
-- [#670](https://github.com/modem-dev/hunk/pull/670) [`45af37c`](https://github.com/victor-software-house/hunk/commit/45af37c5e048dbaa84e06b04acdc304ea6d3739b) - Display tracked CJK and emoji filenames as readable Unicode across review UI, source loading, patch input, and session APIs.
-
 ## 0.18.0-beta.0
 
 ### Minor Changes
