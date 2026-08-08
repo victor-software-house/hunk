@@ -17,12 +17,16 @@ const originalConsoleError = console.error;
 function createRegistration() {
   return createTestSessionRegistration({
     cwd: process.cwd(),
-    inputKind: "diff",
     pid: process.pid,
-    repoRoot: process.cwd(),
-    sourceLabel: "before.ts -> after.ts",
-    title: "before.ts ↔ after.ts",
-    files: [createTestSessionReviewFile({ path: "after.ts" })],
+    activeTab: {
+      cwd: process.cwd(),
+      repoRoot: process.cwd(),
+      input: { kind: "diff", left: "before.ts", right: "after.ts", options: {} },
+      inputKind: "diff",
+      sourceLabel: "before.ts -> after.ts",
+      title: "before.ts ↔ after.ts",
+      files: [createTestSessionReviewFile({ path: "after.ts" })],
+    },
   });
 }
 

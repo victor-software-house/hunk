@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { CliInput } from "../core/types";
+import { cliInputSchema } from "../core/cliInputSchema";
 import type { SessionDaemonRequest } from "./protocol";
 
 /**
@@ -19,20 +19,6 @@ const selectorSchema = z.strictObject({
 });
 
 const sideSchema = z.enum(["old", "new"]);
-
-/**
- * Reload payloads embed a full parsed CLI input tree whose deep shape is owned by the CLI
- * parser, so this envelope check is intentionally shallow: an object with a string `kind`
- * discriminant. A well-formed-but-wrong tree still reaches the reload path, where thrown errors
- * surface through the daemon's JSON error response rather than a schema rejection.
- */
-const nextInputSchema = z.custom<CliInput>(
-  (value) =>
-    typeof value === "object" &&
-    value !== null &&
-    !Array.isArray(value) &&
-    typeof (value as { kind?: unknown }).kind === "string",
-);
 
 const commentApplyItemSchema = z.strictObject({
   filePath: z.string(),
@@ -67,8 +53,31 @@ export const sessionDaemonRequestSchema = z.discriminatedUnion("action", [
   z.strictObject({
     action: z.literal("reload"),
     selector: selectorSchema,
-    nextInput: nextInputSchema,
+    nextInput: cliInputSchema,
     sourcePath: z.string().optional(),
+  }),
+  z.strictObject({
+    action: z.literal("tab-add"),
+    selector: selectorSchema,
+    name: z.string(),
+    sourcePath: z.string(),
+    input: cliInputSchema,
+  }),
+  z.strictObject({
+    action: z.literal("tab-select"),
+    selector: selectorSchema,
+    tab: z.string(),
+  }),
+  z.strictObject({
+    action: z.literal("tab-rename"),
+    selector: selectorSchema,
+    tab: z.string(),
+    name: z.string(),
+  }),
+  z.strictObject({
+    action: z.literal("tab-close"),
+    selector: selectorSchema,
+    tab: z.string(),
   }),
   z.strictObject({
     action: z.literal("comment-add"),
