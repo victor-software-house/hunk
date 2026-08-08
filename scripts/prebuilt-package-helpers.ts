@@ -199,8 +199,7 @@ export function buildPublishArgs(options: {
   npmTag: string;
 }) {
   const args = [
-    "--config",
-    options.bunConfigPath,
+    `--config=${options.bunConfigPath}`,
     "publish",
     "--tolerate-republish",
     "--access",
