@@ -896,6 +896,8 @@ export interface ExtensionSidebarKeybindings {
 
 /** Everything a custom sidebar component receives, refreshed as the app changes. */
 export interface ExtensionSidebarViewProps {
+  /** Whether this review tab currently owns process keyboard input. */
+  readonly active?: boolean;
   /**
    * The reviewed files currently visible, in review-stream order.
    *

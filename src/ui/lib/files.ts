@@ -8,7 +8,9 @@ import { formatTerminalPath } from "../../lib/terminalText";
 export interface FileListEntry {
   kind: "file";
   id: string;
+  path?: string;
   name: string;
+  depth?: number;
   agentCommentsText: string | null;
   additionsText: string | null;
   deletionsText: string | null;
@@ -40,7 +42,10 @@ export interface SidebarFileSource {
 export interface FileGroupEntry {
   kind: "group";
   id: string;
+  path?: string;
   label: string;
+  depth?: number;
+  collapsed?: boolean;
 }
 
 export type SidebarEntry = FileListEntry | FileGroupEntry;
@@ -99,6 +104,24 @@ export function sidebarEntryStatsWidth(
   );
 }
 
+/** Build one file row shared by grouped and tree sidebar layouts. */
+export function buildSidebarFileEntry(file: SidebarFileSource, depth?: number): FileListEntry {
+  const path = formatTerminalPath(normalizeDiffPath(file.path) ?? file.path);
+  const agentCommentCount = file.agent?.annotations.length ?? 0;
+  return {
+    kind: "file",
+    id: file.id,
+    path,
+    name: sidebarFileName(file),
+    ...(depth === undefined ? {} : { depth }),
+    agentCommentsText: agentCommentCount > 0 ? `*${agentCommentCount}` : null,
+    additionsText: formatSidebarStat("+", file.stats.additions, file.statsTruncated),
+    deletionsText: formatSidebarStat("-", file.stats.deletions),
+    changeType: file.changeType ?? readMetadataChangeType(file.metadata) ?? "change",
+    isUntracked: file.isUntracked ?? false,
+  };
+}
+
 /** Merge one file-id keyed annotation map into the review stream file list. */
 export function mergeFileAnnotationsByFileId<T extends AgentAnnotation>(
   files: DiffFile[],
@@ -155,22 +178,12 @@ export function buildSidebarEntries(files: readonly SidebarFileSource[]): Sideba
       entries.push({
         kind: "group",
         id: `group:${group}:${index}`,
+        path: group,
         label: group === "." ? "./" : `${group}/`,
       });
     }
 
-    const agentCommentCount = file.agent?.annotations.length ?? 0;
-
-    entries.push({
-      kind: "file",
-      id: file.id,
-      name: sidebarFileName(file),
-      agentCommentsText: agentCommentCount > 0 ? `*${agentCommentCount}` : null,
-      additionsText: formatSidebarStat("+", file.stats.additions, file.statsTruncated),
-      deletionsText: formatSidebarStat("-", file.stats.deletions),
-      changeType: file.changeType ?? readMetadataChangeType(file.metadata) ?? "change",
-      isUntracked: file.isUntracked ?? false,
-    });
+    entries.push(buildSidebarFileEntry(file));
   });
 
   return entries;
