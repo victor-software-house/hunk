@@ -34,7 +34,38 @@ describe("startup update notice", () => {
         }),
       ).resolves.toEqual({
         key: "latest:0.7.1",
-        message: "Update available: 0.7.1 (latest) • npm i -g hunkdiff",
+        message: "Update available: 0.7.1 (latest) • bun add -g @victor-software-house/hunk",
+      });
+    });
+  });
+
+  test("reads stable and beta updates from scoped VSH GitHub Releases", async () => {
+    await withTempStatePath(async (statePath) => {
+      await expect(
+        resolveStartupUpdateNotice({
+          fetchImpl: async () =>
+            new Response(
+              JSON.stringify([
+                {
+                  tag_name: "@victor-software-house/hunk@0.8.0-beta.2",
+                  prerelease: true,
+                  draft: false,
+                },
+                {
+                  tag_name: "@victor-software-house/hunk@0.7.1",
+                  prerelease: false,
+                  draft: false,
+                },
+                { tag_name: "v0.9.0", prerelease: false, draft: false },
+              ]),
+              { status: 200 },
+            ),
+          resolveInstalledVersion: () => "0.7.0",
+          statePath,
+        }),
+      ).resolves.toEqual({
+        key: "latest:0.7.1",
+        message: "Update available: 0.7.1 (latest) • bun add -g @victor-software-house/hunk",
       });
     });
   });
@@ -49,7 +80,8 @@ describe("startup update notice", () => {
         }),
       ).resolves.toEqual({
         key: "beta:0.8.0-beta.1",
-        message: "Update available: 0.8.0-beta.1 (beta) • npm i -g hunkdiff@beta",
+        message:
+          "Update available: 0.8.0-beta.1 (beta) • bun add -g @victor-software-house/hunk@beta",
       });
     });
   });
@@ -64,7 +96,8 @@ describe("startup update notice", () => {
         }),
       ).resolves.toEqual({
         key: "beta:0.8.1-beta.1",
-        message: "Update available: 0.8.1-beta.1 (beta) • npm i -g hunkdiff@beta",
+        message:
+          "Update available: 0.8.1-beta.1 (beta) • bun add -g @victor-software-house/hunk@beta",
       });
     });
   });
