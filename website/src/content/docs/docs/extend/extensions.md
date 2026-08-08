@@ -7,7 +7,7 @@ A Hunk extension is one TypeScript (or JavaScript) file that default-exports a f
 
 ```ts
 // ~/.config/hunk/extensions/hello.ts
-import type { HunkExtensionAPI } from "hunkdiff/extension";
+import type { HunkExtensionAPI } from "@victor-software-house/hunk/extension";
 
 export default function (hunk: HunkExtensionAPI) {
   hunk.on("startup", (_event, ctx) => {
@@ -16,7 +16,7 @@ export default function (hunk: HunkExtensionAPI) {
 }
 ```
 
-**The API is experimental**: `hunkdiff/extension` may change in breaking ways between minor releases while it stabilizes. Breaking changes are called out in release notes, and `hunk.apiVersion` identifies the surface an extension was written against.
+**The API is experimental**: `@victor-software-house/hunk/extension` may change in breaking ways between minor releases while it stabilizes. Breaking changes are called out in release notes, and `hunk.apiVersion` identifies the surface an extension was written against.
 
 What an extension can register is covered by the companion pages: the [extension API](/docs/extend/extension-api/), [file previews](/docs/extend/file-previews/), [VCS adapters](/docs/extend/vcs-adapters/), and [custom sidebars](/docs/extend/custom-sidebars/).
 
@@ -121,7 +121,7 @@ Collapse lockfiles and generated output out of every review, and say how many fi
 
 ```ts
 // ~/.config/hunk/extensions/collapse-generated.ts
-import type { HunkExtensionAPI } from "hunkdiff/extension";
+import type { HunkExtensionAPI } from "@victor-software-house/hunk/extension";
 
 /** Match one path against a `*`-only glob, anchored at both ends. */
 function matchesPattern(path: string, pattern: string) {

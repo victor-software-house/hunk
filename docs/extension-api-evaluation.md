@@ -1,6 +1,6 @@
 # Extension API field notes: Review triage
 
-`examples/extensions/review-triage/` is a deliberately ordinary, user-installable extension built only against `hunkdiff/extension`. It provides a session-local hunk triage board: a reviewer can open a right sidebar, navigate through public hunk summaries, mark the current hunk approved/investigate/blocked with an optional rationale, and clear decisions. Its commands are ordinary **Extensions** menu entries, while lifecycle and bus events keep the board current.
+`examples/extensions/review-triage/` is a deliberately ordinary, user-installable extension built only against `@victor-software-house/hunk/extension`. It provides a session-local hunk triage board: a reviewer can open a right sidebar, navigate through public hunk summaries, mark the current hunk approved/investigate/blocked with an optional rationale, and clear decisions. Its commands are ordinary **Extensions** menu entries, while lifecycle and bus events keep the board current.
 
 Building it validated the API's central path: a third-party extension can compose a React sidebar, menu-reachable commands, host-owned modal dialogs, selection snapshots, lifecycle subscriptions, notifications, and a small inter-extension bus without imports from Hunk internals. The PTY integration test loads this exact directory rather than a string fixture.
 
