@@ -1,3 +1,6 @@
+import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { createPtyHarness } from "./harness";
 
@@ -88,7 +91,7 @@ describe("PTY navigation", () => {
     const session = await harness.launchHunk({
       args: ["diff", "--mode", "split"],
       cwd: fixture.dir,
-      cols: 120,
+      cols: 220,
       rows: 16,
     });
 
@@ -96,6 +99,7 @@ describe("PTY navigation", () => {
       await session.waitForText(/View\s+Navigate\s+Agent\s+Help/, {
         timeout: 15_000,
       });
+      await harness.ensureKeyboardIsLive(session);
 
       // The fixture has 18 long-file hunks followed by two short-file hunks.
       // Navigate by that semantic count: the larger tabbed viewport can render
@@ -160,6 +164,89 @@ describe("PTY navigation", () => {
 
       expect(firstHunk).toContain("line1 = 100");
       expect(firstHunk).not.toContain("line60 = 6000");
+    } finally {
+      session.close();
+    }
+  });
+
+  test("R opens the bundled history range flow without replacing the review stream", async () => {
+    const fixture = harness.createSidebarJumpRepoFixture();
+    const session = await harness.launchHunk({
+      args: ["diff", "--mode", "split"],
+      cwd: fixture.dir,
+      cols: 220,
+      rows: 16,
+    });
+
+    try {
+      const initial = await session.waitForText(/Files\s+History/, { timeout: 15_000 });
+      expect(initial).toContain("alpha.ts");
+
+      await session.type("R");
+      const history = await session.waitForText(/[0-9a-f]{7} initial/, { timeout: 5_000 });
+      expect(history).toContain("History");
+      expect(history).toContain("Enter/click base");
+      expect(history).toContain("refs branch");
+      expect(history).toContain("alpha.ts");
+
+      await session.press("escape");
+      const files = await session.waitForText(/alpha\.ts/, { timeout: 5_000 });
+      expect(files).not.toContain("Enter/click base");
+    } finally {
+      session.close();
+    }
+  });
+
+  test("an applied History range stays highlighted after the review reload", async () => {
+    const fixture = harness.createSidebarJumpRepoFixture();
+    execFileSync("git", ["add", "."], { cwd: fixture.dir });
+    execFileSync("git", ["commit", "-m", "latest"], { cwd: fixture.dir, stdio: "ignore" });
+    writeFileSync(join(fixture.dir, "alpha.ts"), "export const alphaValue = 3;\n");
+    const session = await harness.launchHunk({
+      args: ["diff", "--mode", "split"],
+      cwd: fixture.dir,
+      cols: 220,
+      rows: 18,
+    });
+
+    try {
+      await session.waitForText(/Files\s+History/, { timeout: 15_000 });
+      await harness.ensureKeyboardIsLive(session);
+      await session.type("R");
+      const history = await session.waitForText(/([0-9a-f]{7}) initial/, { timeout: 5_000 });
+      const initial = history.match(/([0-9a-f]{7}) initial/)?.[1];
+      const latest = history.match(/([0-9a-f]{7}) \* ([^\s]+) latest/)?.[1];
+      const currentBranch = history.match(/([0-9a-f]{7}) \* ([^\s]+) latest/)?.[2];
+      expect(initial).toBeDefined();
+      expect(latest).toBeDefined();
+      expect(currentBranch).toBeDefined();
+      expect(history).toContain(`refs branch ${currentBranch}`);
+
+      await session.press("down");
+      await session.press("enter");
+      await session.press("up");
+
+      const preview = await harness.waitForSnapshot(
+        session,
+        (text) =>
+          text.includes(`H ${latest} * ${currentBranch} latest`) &&
+          text.includes(`B ${initial} initial`),
+        5_000,
+      );
+      expect(preview).toContain(`H ${latest} * ${currentBranch} latest`);
+      expect(preview).toContain(`B ${initial} initial`);
+
+      await session.press("enter");
+      const applied = await harness.waitForSnapshot(
+        session,
+        (text) =>
+          text.includes("Enter/click base") &&
+          text.includes(`H ${latest} * ${currentBranch} latest`) &&
+          text.includes(`B ${initial} initial`),
+        10_000,
+      );
+      expect(applied).toContain(`H ${latest} * ${currentBranch} latest`);
+      expect(applied).toContain(`B ${initial} initial`);
     } finally {
       session.close();
     }
