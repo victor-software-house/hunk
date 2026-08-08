@@ -2,6 +2,7 @@
 
 import { $ } from "bun";
 import path from "node:path";
+import { cleanGitEnv } from "./git-env";
 
 export interface ValidateVshReleaseOptions {
   repoRoot?: string;
@@ -41,9 +42,11 @@ export async function validateVshRelease(options: ValidateVshReleaseOptions = {}
     throw new Error(`The ${heading} changelog section still links to modem-dev/hunk.`);
   }
 
-  await $`git fetch origin main`.cwd(repoRoot);
+  const gitEnv = cleanGitEnv();
+  await $`git fetch origin main`.cwd(repoRoot).env(gitEnv);
   const ancestor = await $`git merge-base --is-ancestor HEAD origin/main`
     .cwd(repoRoot)
+    .env(gitEnv)
     .nothrow()
     .quiet();
   if (ancestor.exitCode !== 0) {
@@ -53,7 +56,9 @@ export async function validateVshRelease(options: ValidateVshReleaseOptions = {}
   const eventName = options.eventName ?? process.env.GITHUB_EVENT_NAME;
   if (eventName === "pull_request") {
     const changed = new Set(
-      (await $`git diff --name-only HEAD^1 HEAD`.cwd(repoRoot).text()).trim().split("\n"),
+      (await $`git diff --name-only HEAD^1 HEAD`.cwd(repoRoot).env(gitEnv).text())
+        .trim()
+        .split("\n"),
     );
     for (const required of ["package.json", "CHANGELOG.md"]) {
       if (!changed.has(required)) {
@@ -61,20 +66,20 @@ export async function validateVshRelease(options: ValidateVshReleaseOptions = {}
       }
     }
     const previousManifest = JSON.parse(
-      await $`git show HEAD^1:package.json`.cwd(repoRoot).text(),
+      await $`git show HEAD^1:package.json`.cwd(repoRoot).env(gitEnv).text(),
     ) as { version: string };
     if (previousManifest.version === manifest.version) {
       throw new Error(`Version Packages did not change ${manifest.version}.`);
     }
   }
   if (eventName === "workflow_dispatch") {
-    const subject = (await $`git log -1 --pretty=%s`.cwd(repoRoot).text()).trim();
+    const subject = (await $`git log -1 --pretty=%s`.cwd(repoRoot).env(gitEnv).text()).trim();
     if (subject !== "chore(release): version packages") {
       throw new Error(`Manual release SHA has unexpected subject: ${subject}`);
     }
   }
 
-  const releaseSha = (await $`git rev-parse HEAD`.cwd(repoRoot).text()).trim();
+  const releaseSha = (await $`git rev-parse HEAD`.cwd(repoRoot).env(gitEnv).text()).trim();
   console.log(`Validated ${manifest.name}@${manifest.version} at ${releaseSha}.`);
   return { name: manifest.name, version: manifest.version, releaseSha };
 }

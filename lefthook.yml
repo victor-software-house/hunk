@@ -24,5 +24,9 @@ pre-push:
   commands:
     lockfile-sync:
       run: mise run --no-deps lockfile:sync
-    verify:
-      run: mise run verify
+    format:
+      run: mise run format:check
+    lint:
+      run: mise run lint
+    typecheck:
+      run: mise run typecheck

@@ -3,11 +3,17 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { finalizeVshTag } from "./finalize-vsh-tag";
+import { cleanGitEnv } from "./git-env";
 
 const roots: string[] = [];
 
 function git(cwd: string, ...args: string[]) {
-  const result = Bun.spawnSync(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+  const result = Bun.spawnSync(["git", ...args], {
+    cwd,
+    stdout: "pipe",
+    stderr: "pipe",
+    env: cleanGitEnv(),
+  });
   if (result.exitCode !== 0) throw new Error(Buffer.from(result.stderr).toString("utf8"));
   return Buffer.from(result.stdout).toString("utf8").trim();
 }

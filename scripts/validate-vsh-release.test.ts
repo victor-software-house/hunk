@@ -2,12 +2,18 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { cleanGitEnv } from "./git-env";
 import { validateVshRelease } from "./validate-vsh-release";
 
 const roots: string[] = [];
 
 function git(cwd: string, ...args: string[]) {
-  const result = Bun.spawnSync(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+  const result = Bun.spawnSync(["git", ...args], {
+    cwd,
+    stdout: "pipe",
+    stderr: "pipe",
+    env: cleanGitEnv(),
+  });
   if (result.exitCode !== 0) throw new Error(Buffer.from(result.stderr).toString("utf8"));
 }
 

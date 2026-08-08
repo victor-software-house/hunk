@@ -3,6 +3,7 @@
 import { $ } from "bun";
 import { appendFileSync } from "node:fs";
 import path from "node:path";
+import { cleanGitEnv } from "./git-env";
 
 export interface FinalizeVshTagOptions {
   repoRoot?: string;
@@ -15,11 +16,12 @@ export async function finalizeVshTag(options: FinalizeVshTagOptions = {}) {
   const manifest = (await Bun.file(path.join(repoRoot, "package.json")).json()) as {
     version: string;
   };
-  const releaseSha = (await $`git rev-parse HEAD`.cwd(repoRoot).text()).trim();
+  const gitEnv = cleanGitEnv();
+  const releaseSha = (await $`git rev-parse HEAD`.cwd(repoRoot).env(gitEnv).text()).trim();
   const tag = `@victor-software-house/hunk@${manifest.version}`;
 
   const remoteRef = async (ref: string) => {
-    const output = await $`git ls-remote --tags origin ${ref}`.cwd(repoRoot).text();
+    const output = await $`git ls-remote --tags origin ${ref}`.cwd(repoRoot).env(gitEnv).text();
     return output.trim().split(/\s+/, 1)[0] ?? "";
   };
 
@@ -31,12 +33,12 @@ export async function finalizeVshTag(options: FinalizeVshTagOptions = {}) {
   }
 
   if (!tagRef) {
-    await $`git config user.name github-actions[bot]`.cwd(repoRoot);
-    await $`git config user.email 41898282+github-actions[bot]@users.noreply.github.com`.cwd(
-      repoRoot,
-    );
-    await $`git tag -a ${tag} ${releaseSha} -m ${tag}`.cwd(repoRoot);
-    await $`git push origin ${`refs/tags/${tag}:refs/tags/${tag}`}`.cwd(repoRoot);
+    await $`git config user.name github-actions[bot]`.cwd(repoRoot).env(gitEnv);
+    await $`git config user.email 41898282+github-actions[bot]@users.noreply.github.com`
+      .cwd(repoRoot)
+      .env(gitEnv);
+    await $`git tag -a ${tag} ${releaseSha} -m ${tag}`.cwd(repoRoot).env(gitEnv);
+    await $`git push origin ${`refs/tags/${tag}:refs/tags/${tag}`}`.cwd(repoRoot).env(gitEnv);
   }
 
   const verified = await remoteRef(`refs/tags/${tag}^{}`);
