@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.0-beta.2
+
+### Patch Changes
+
+- Use the repository GitHub Packages credentials when publishing staged native packages ([`c0daeb0`](https://github.com/victor-software-house/hunk/commit/c0daeb072e6c79c660db82550920e8a996ae3f67)).
+
 ## 0.18.0-beta.1
 
 ### Minor Changes
