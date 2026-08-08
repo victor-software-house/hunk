@@ -2,8 +2,7 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { releaseNpmDir } from "./prebuilt-package-helpers";
-import { npmCommand } from "./script-helpers";
+import { classifyPackageSetPublication, releaseNpmDir } from "./prebuilt-package-helpers";
 
 type PackageJson = {
   name: string;
@@ -41,8 +40,8 @@ function parseArgs(argv: string[]) {
   };
 }
 
-function npmViewExists(name: string, version: string) {
-  const proc = Bun.spawnSync([npmCommand, "view", `${name}@${version}`, "version"], {
+function packageExists(name: string, version: string) {
+  const proc = Bun.spawnSync(["bun", "pm", "view", `${name}@${version}`], {
     stdin: "ignore",
     stdout: "pipe",
     stderr: "ignore",
@@ -57,21 +56,12 @@ function publishDirectory(directory: string, dryRun: boolean, npmTag: string) {
     readFileSync(path.join(directory, "package.json"), "utf8"),
   ) as PackageJson;
 
-  if (npmViewExists(packageJson.name, packageJson.version)) {
-    console.log(
-      dryRun
-        ? `Skipping npm publish dry-run for ${packageJson.name}@${packageJson.version}; that version already exists on npm.`
-        : `Skipping ${packageJson.name}@${packageJson.version}; already published.`,
-    );
-    return;
-  }
-
-  const args = ["publish", "--access", "public", "--tag", npmTag];
+  const args = ["publish", "--tolerate-republish", "--access", "restricted", "--tag", npmTag];
   if (dryRun) {
     args.push("--dry-run");
   }
 
-  const proc = Bun.spawnSync([npmCommand, ...args], {
+  const proc = Bun.spawnSync(["bun", ...args], {
     cwd: directory,
     stdin: "ignore",
     stdout: "inherit",
@@ -80,7 +70,7 @@ function publishDirectory(directory: string, dryRun: boolean, npmTag: string) {
   });
 
   if (proc.exitCode !== 0) {
-    throw new Error(`npm publish failed for ${packageJson.name}@${packageJson.version}`);
+    throw new Error(`bun publish failed for ${packageJson.name}@${packageJson.version}`);
   }
 }
 
@@ -94,24 +84,45 @@ if (!existsSync(releaseRoot)) {
 
 const directories = readdirSync(releaseRoot, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
-  .map((entry) => entry.name)
+  .map((entry) => path.join(releaseRoot, entry.name))
   .sort((left, right) => {
-    if (left === "hunkdiff") return 1;
-    if (right === "hunkdiff") return -1;
-    return left.localeCompare(right);
-  })
-  .map((entry) => path.join(releaseRoot, entry));
+    const leftName = (
+      JSON.parse(readFileSync(path.join(left, "package.json"), "utf8")) as PackageJson
+    ).name;
+    const rightName = (
+      JSON.parse(readFileSync(path.join(right, "package.json"), "utf8")) as PackageJson
+    ).name;
+    if (leftName === "@victor-software-house/hunk") return 1;
+    if (rightName === "@victor-software-house/hunk") return -1;
+    return leftName.localeCompare(rightName);
+  });
 
 if (directories.length === 0) {
   throw new Error(`No staged packages found in ${releaseRoot}`);
 }
 
-for (const directory of directories) {
-  publishDirectory(directory, options.dryRun, options.npmTag);
+const packages = directories.map((directory) => {
+  const manifest = JSON.parse(
+    readFileSync(path.join(directory, "package.json"), "utf8"),
+  ) as PackageJson;
+  return { directory, manifest, exists: packageExists(manifest.name, manifest.version) };
+});
+const publication = classifyPackageSetPublication(
+  packages.map((entry) => ({ ...entry.manifest, exists: entry.exists })),
+);
+
+if (publication === "all") {
+  console.log(
+    `All ${packages.length} staged packages already exist at ${packages[0]!.manifest.version}; nothing to publish.`,
+  );
+} else {
+  for (const { directory } of packages) {
+    publishDirectory(directory, options.dryRun, options.npmTag);
+  }
 }
 
 console.log(
   options.dryRun
-    ? `Completed npm publish dry-run for staged prebuilt packages with dist-tag "${options.npmTag}".`
-    : `Published staged prebuilt packages to npm with dist-tag "${options.npmTag}".`,
+    ? `Completed Bun publish dry-run for staged GitHub Packages with dist-tag "${options.npmTag}".`
+    : `Published staged GitHub Packages with dist-tag "${options.npmTag}".`,
 );

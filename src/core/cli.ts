@@ -11,6 +11,7 @@ import type {
   ParsedCliInput,
   SessionCommentListType,
   SessionCommentApplyItemInput,
+  SessionCommandOutput,
 } from "./types";
 import { resolveBundledHunkReviewSkillPath } from "./paths";
 import {
@@ -25,6 +26,7 @@ import {
   SESSION_AGENT_COMMANDS,
   SESSION_AGENT_COMMAND_LIST,
   SESSION_COMMENT_COMMAND_LIST,
+  SESSION_TAB_COMMAND_LIST,
 } from "../session/agent/surface";
 import {
   COMMENT_APPLY_STDIN_MESSAGE,
@@ -450,7 +452,7 @@ async function parseStandaloneCommand(command: Command, tokens: string[]) {
 }
 
 /** Resolve whether one nested CLI command requested JSON output. */
-function resolveJsonOutput(options: { json?: boolean }) {
+function resolveJsonOutput(options: { json?: boolean }): SessionCommandOutput {
   return options.json ? "json" : "text";
 }
 
@@ -1060,6 +1062,93 @@ async function parseSessionCommand(tokens: string[]): Promise<ParsedCliInput> {
       sourcePath: resolvedReload.sourcePath,
       nextInput,
     };
+  }
+
+  if (subcommand === "tab") {
+    const [tabSubcommand, ...tabRest] = rest;
+    if (!tabSubcommand || tabSubcommand === "--help" || tabSubcommand === "-h") {
+      return {
+        kind: "help",
+        text: ["Usage:", ...sessionUsageLines(SESSION_TAB_COMMAND_LIST)].join("\n") + "\n",
+      };
+    }
+
+    if (tabSubcommand === "add") {
+      const separatorIndex = tabRest.indexOf("--");
+      const outerTokens = separatorIndex === -1 ? tabRest : tabRest.slice(0, separatorIndex);
+      const command = buildSessionCommand(SESSION_AGENT_COMMANDS["tab-add"]);
+      let parsedSessionId: string | undefined;
+      let parsedOptions: SessionCommandOptions<"tab-add"> = { name: "", source: "" };
+
+      command.action((sessionId: string | undefined, options: SessionCommandOptions<"tab-add">) => {
+        parsedSessionId = sessionId;
+        parsedOptions = options;
+      });
+      if (outerTokens.includes("--help") || outerTokens.includes("-h")) {
+        return sessionCommandHelpText(command, SESSION_AGENT_COMMANDS["tab-add"]);
+      }
+      if (separatorIndex === -1 || separatorIndex === tabRest.length - 1) {
+        throw new Error(
+          "Pass the new tab's Hunk review command after `--`, such as `diff` or `show`.",
+        );
+      }
+
+      await parseStandaloneCommand(command, outerTokens);
+      const input = requireReloadableCliInput(
+        await parseCli(["bun", "hunk", ...tabRest.slice(separatorIndex + 1)]),
+      );
+      const target = resolveReloadSelector(
+        parsedSessionId,
+        parsedOptions.sessionPath,
+        parsedOptions.repo,
+        parsedOptions.source,
+      );
+      return {
+        kind: "session",
+        action: "tab-add",
+        output: resolveJsonOutput(parsedOptions),
+        selector: target.selector,
+        name: parsedOptions.name,
+        sourcePath: target.sourcePath!,
+        input,
+      };
+    }
+
+    if (tabSubcommand === "select" || tabSubcommand === "rename" || tabSubcommand === "close") {
+      const action = `tab-${tabSubcommand}` as const;
+      const spec = SESSION_AGENT_COMMANDS[action];
+      const command = buildSessionCommand(spec);
+      let parsedSessionId: string | undefined;
+      let parsedOptions: SessionCommandOptions<"tab-rename"> = { tab: "", name: "" };
+
+      command.action(
+        (sessionId: string | undefined, options: SessionCommandOptions<"tab-rename">) => {
+          parsedSessionId = sessionId;
+          parsedOptions = options;
+        },
+      );
+      if (tabRest.includes("--help") || tabRest.includes("-h")) {
+        return sessionCommandHelpText(command, spec);
+      }
+      await parseStandaloneCommand(command, tabRest);
+      const target = resolveReloadSelector(
+        parsedSessionId,
+        parsedOptions.sessionPath,
+        parsedOptions.repo,
+        undefined,
+      );
+      const common = {
+        kind: "session" as const,
+        output: resolveJsonOutput(parsedOptions),
+        selector: target.selector,
+        tab: parsedOptions.tab,
+      };
+      return action === "tab-rename"
+        ? { ...common, action, name: parsedOptions.name }
+        : { ...common, action };
+    }
+
+    throw new Error(`Unknown session tab command: ${tabSubcommand}`);
   }
 
   if (subcommand === "comment") {

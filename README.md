@@ -2,11 +2,11 @@
 
 Hunk is a review-first terminal diff viewer for agent-authored changesets, built on [OpenTUI](https://github.com/anomalyco/opentui) and [Pierre diffs](https://www.npmjs.com/package/@pierre/diffs).
 
-[![CI status](https://img.shields.io/github/actions/workflow/status/modem-dev/hunk/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/modem-dev/hunk/actions/workflows/ci.yml?branch=main)
-[![Latest release](https://img.shields.io/github/v/release/modem-dev/hunk?style=for-the-badge)](https://github.com/modem-dev/hunk/releases)
+[![CI status](https://img.shields.io/github/actions/workflow/status/victor-software-house/hunk/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/victor-software-house/hunk/actions/workflows/ci.yml?branch=main)
+[![Latest release](https://img.shields.io/github/v/release/victor-software-house/hunk?style=for-the-badge)](https://github.com/victor-software-house/hunk/releases)
 [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
 
-- multi-file review stream with sidebar navigation
+- multi-file review stream with collapsible Files and local History navigation
 - inline AI and agent annotations beside the code
 - split, stack, and responsive auto layouts
 - watch mode for auto-reloading file and Git-backed reviews
@@ -27,17 +27,23 @@ Hunk is a review-first terminal diff viewer for agent-authored changesets, built
  </tr>
 </table>
 
-## Install
+## Install the VSH fork
 
-```bash
-npm i -g hunkdiff
+Configure Bun once for the authenticated GitHub Packages scope:
+
+```toml
+# ~/.bunfig.toml
+[install.scopes]
+"@victor-software-house" = { url = "https://npm.pkg.github.com", token = "$GITHUB_TOKEN" }
 ```
 
-Or with Homebrew:
+Then install the current beta while exporting a GitHub token with `read:packages`:
 
 ```bash
-brew install hunk
+GITHUB_TOKEN="$(gh auth token)" bun add -g @victor-software-house/hunk@beta
 ```
+
+The installed commands remain `hunk` and `hunkdiff`.
 
 > [!NOTE]
 > If you previously installed hunk via `modem-dev/tap`, be sure to uninstall it first with `brew uninstall modem-dev/tap/hunk`.
@@ -98,17 +104,17 @@ For the full live-session and `--agent-context` workflow guide, see [docs/agent-
 
 ## Feature comparison
 
-| Capability                         | [hunk](https://github.com/modem-dev/hunk) | [lumen](https://github.com/jnsahaj/lumen) | [difftastic](https://github.com/Wilfred/difftastic) | [delta](https://github.com/dandavison/delta) | [diff-so-fancy](https://github.com/so-fancy/diff-so-fancy) | [diff](https://www.gnu.org/software/diffutils/) |
-| ---------------------------------- | ----------------------------------------- | ----------------------------------------- | --------------------------------------------------- | -------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------- |
-| Review-first interactive UI        | ✅                                        | ✅                                        | ❌                                                  | ❌                                           | ❌                                                         | ❌                                              |
-| Multi-file review stream + sidebar | ✅                                        | ✅                                        | ❌                                                  | ❌                                           | ❌                                                         | ❌                                              |
-| Inline agent / AI annotations      | ✅                                        | ❌                                        | ❌                                                  | ❌                                           | ❌                                                         | ❌                                              |
-| Responsive auto split/stack layout | ✅                                        | ❌                                        | ❌                                                  | ❌                                           | ❌                                                         | ❌                                              |
-| Mouse support inside the viewer    | ✅                                        | ✅                                        | ❌                                                  | ❌                                           | ❌                                                         | ❌                                              |
-| Runtime view toggles               | ✅                                        | ✅                                        | ❌                                                  | ❌                                           | ❌                                                         | ❌                                              |
-| Syntax highlighting                | ✅                                        | ✅                                        | ✅                                                  | ✅                                           | ❌                                                         | ❌                                              |
-| Structural diffing                 | ❌                                        | ❌                                        | ✅                                                  | ❌                                           | ❌                                                         | ❌                                              |
-| Pager-compatible mode              | ✅                                        | ❌                                        | ✅                                                  | ✅                                           | ✅                                                         | ✅                                              |
+| Capability                         | [hunk](https://github.com/victor-software-house/hunk) | [lumen](https://github.com/jnsahaj/lumen) | [difftastic](https://github.com/Wilfred/difftastic) | [delta](https://github.com/dandavison/delta) | [diff-so-fancy](https://github.com/so-fancy/diff-so-fancy) | [diff](https://www.gnu.org/software/diffutils/) |
+| ---------------------------------- | ----------------------------------------------------- | ----------------------------------------- | --------------------------------------------------- | -------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------- |
+| Review-first interactive UI        | ✅                                                    | ✅                                        | ❌                                                  | ❌                                           | ❌                                                         | ❌                                              |
+| Multi-file review stream + sidebar | ✅                                                    | ✅                                        | ❌                                                  | ❌                                           | ❌                                                         | ❌                                              |
+| Inline agent / AI annotations      | ✅                                                    | ❌                                        | ❌                                                  | ❌                                           | ❌                                                         | ❌                                              |
+| Responsive auto split/stack layout | ✅                                                    | ❌                                        | ❌                                                  | ❌                                           | ❌                                                         | ❌                                              |
+| Mouse support inside the viewer    | ✅                                                    | ✅                                        | ❌                                                  | ❌                                           | ❌                                                         | ❌                                              |
+| Runtime view toggles               | ✅                                                    | ✅                                        | ❌                                                  | ❌                                           | ❌                                                         | ❌                                              |
+| Syntax highlighting                | ✅                                                    | ✅                                        | ✅                                                  | ✅                                           | ❌                                                         | ❌                                              |
+| Structural diffing                 | ❌                                                    | ❌                                        | ✅                                                  | ❌                                           | ❌                                                         | ❌                                              |
+| Pager-compatible mode              | ✅                                                    | ❌                                        | ✅                                                  | ✅                                           | ✅                                                         | ✅                                              |
 
 Hunk is optimized for reviewing a full changeset interactively.
 
@@ -218,7 +224,7 @@ transient messages:
 
 ```ts
 // ~/.config/hunk/extensions/collapse-lockfiles.ts
-import type { HunkExtensionAPI } from "hunkdiff/extension";
+import type { HunkExtensionAPI } from "@victor-software-house/hunk/extension";
 
 export default function (hunk: HunkExtensionAPI) {
   hunk.transformChangeset((changeset, ctx) => {
@@ -236,7 +242,7 @@ include [review triage](examples/extensions/review-triage/) and an optional
 
 ### OpenTUI component
 
-Hunk also publishes `HunkDiffView` and lower-level primitives from `hunkdiff/opentui` for embedding the same diff renderer in your own OpenTUI app.
+Hunk also publishes `HunkDiffView` and lower-level primitives from `@victor-software-house/hunk/opentui` for embedding the same diff renderer in your own OpenTUI app.
 
 See [docs/opentui-component.md](docs/opentui-component.md) for install, API, and runnable examples.
 
@@ -251,6 +257,15 @@ Each example includes the exact command to run from the repository root.
 💬 _Chat with users/contributors on the [Modem Discord server](https://discord.gg/WZFjaP6Gt8)_
 
 For source setup, tests, packaging checks, and repo architecture, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+This fork pins Bun and Lefthook through mise:
+
+```bash
+mise install --locked
+mise run hooks:install
+mise run verify
+mise run verify:terminal
+```
 
 ## Sponsor
 

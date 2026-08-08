@@ -217,6 +217,33 @@ export interface SessionReloadCommandInput {
   sourcePath?: string;
 }
 
+export interface SessionTabAddCommandInput {
+  kind: "session";
+  action: "tab-add";
+  output: SessionCommandOutput;
+  selector: SessionSelectorInput;
+  name: string;
+  sourcePath: string;
+  input: CliInput;
+}
+
+export interface SessionTabTargetCommandInput {
+  kind: "session";
+  action: "tab-select" | "tab-close";
+  output: SessionCommandOutput;
+  selector: SessionSelectorInput;
+  tab: string;
+}
+
+export interface SessionTabRenameCommandInput {
+  kind: "session";
+  action: "tab-rename";
+  output: SessionCommandOutput;
+  selector: SessionSelectorInput;
+  tab: string;
+  name: string;
+}
+
 export interface SessionCommentAddCommandInput {
   kind: "session";
   action: "comment-add";
@@ -285,6 +312,9 @@ export type SessionCommandInput =
   | SessionReviewCommandInput
   | SessionNavigateCommandInput
   | SessionReloadCommandInput
+  | SessionTabAddCommandInput
+  | SessionTabTargetCommandInput
+  | SessionTabRenameCommandInput
   | SessionCommentAddCommandInput
   | SessionCommentApplyCommandInput
   | SessionCommentListCommandInput

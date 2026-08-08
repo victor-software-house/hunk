@@ -2,6 +2,7 @@ import { Component, useMemo, type ReactNode } from "react";
 import type {
   ExtensionDiffFile,
   ExtensionNotifyType,
+  ExtensionReviewControls,
   ExtensionSidebarActions,
   ExtensionSidebarKeybindings,
   ExtensionSidebarViewProps,
@@ -82,6 +83,7 @@ class ExtensionSidebarErrorBoundary extends Component<
  * is what keeps them sufficient for third-party sidebars.
  */
 export function ExtensionSidebarPane({
+  active = true,
   registered,
   files,
   fileViews,
@@ -91,11 +93,13 @@ export function ExtensionSidebarPane({
   theme,
   width,
   keybindings,
+  review,
   notify,
   onSelectFile,
   onSelectHunk,
   onRenderFailure,
 }: {
+  active?: boolean;
   registered: RegisteredSidebarView;
   /**
    * The visible review-stream files, already filtered like the built-in
@@ -116,6 +120,7 @@ export function ExtensionSidebarPane({
   theme: AppTheme;
   width: number;
   keybindings: ExtensionSidebarKeybindings;
+  review: ExtensionReviewControls;
   notify: ExtensionNotifySink;
   onSelectFile: (fileId: string) => void;
   onSelectHunk: (fileId: string, hunkIndex: number) => void;
@@ -156,12 +161,14 @@ export function ExtensionSidebarPane({
   const View = registered.view.component as (props: ExtensionSidebarViewProps) => ReactNode;
 
   const viewProps: ExtensionSidebarViewProps = {
+    active,
     files: fileViews,
     selectedFileId,
     selectedHunkIndex,
     width,
     theme: publicTheme,
     keybindings,
+    review,
     actions,
   };
 

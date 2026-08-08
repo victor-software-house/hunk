@@ -216,10 +216,10 @@ show one live Hunk session
 hunk session get (<session-id> | --repo <path>) [--json]
 ```
 
-| Option          | Description                                               |
-| --------------- | --------------------------------------------------------- |
-| `--repo <path>` | target the live session whose repo root matches this path |
-| `--json`        | emit structured JSON                                      |
+| Option          | Description                                                          |
+| --------------- | -------------------------------------------------------------------- |
+| `--repo <path>` | target the live session whose active tab repo root matches this path |
+| `--json`        | emit structured JSON                                                 |
 
 **Positionals:** `[sessionId]`.
 
@@ -231,10 +231,10 @@ show the selected file and hunk for one live Hunk session
 hunk session context (<session-id> | --repo <path>) [--json]
 ```
 
-| Option          | Description                                               |
-| --------------- | --------------------------------------------------------- |
-| `--repo <path>` | target the live session whose repo root matches this path |
-| `--json`        | emit structured JSON                                      |
+| Option          | Description                                                          |
+| --------------- | -------------------------------------------------------------------- |
+| `--repo <path>` | target the live session whose active tab repo root matches this path |
+| `--json`        | emit structured JSON                                                 |
 
 **Positionals:** `[sessionId]`.
 
@@ -246,12 +246,12 @@ export the live review model for one Hunk session
 hunk session review (<session-id> | --repo <path>) [--include-patch] [--include-notes] [--json]
 ```
 
-| Option            | Description                                                  |
-| ----------------- | ------------------------------------------------------------ |
-| `--repo <path>`   | target the live session whose repo root matches this path    |
-| `--include-patch` | include raw unified diff text for each file in review output |
-| `--include-notes` | include live review notes in review output                   |
-| `--json`          | emit structured JSON                                         |
+| Option            | Description                                                          |
+| ----------------- | -------------------------------------------------------------------- |
+| `--repo <path>`   | target the live session whose active tab repo root matches this path |
+| `--include-patch` | include raw unified diff text for each file in review output         |
+| `--include-notes` | include live review notes in review output                           |
+| `--json`          | emit structured JSON                                                 |
 
 **Positionals:** `[sessionId]`.
 
@@ -264,16 +264,16 @@ hunk session navigate (<session-id> | --repo <path>) --file <path> (--hunk <n> |
 hunk session navigate (<session-id> | --repo <path>) (--next-comment | --prev-comment) [--json]
 ```
 
-| Option           | Description                                               |
-| ---------------- | --------------------------------------------------------- |
-| `--file <path>`  | diff file path as shown by Hunk                           |
-| `--repo <path>`  | target the live session whose repo root matches this path |
-| `--hunk <n>`     | 1-based hunk number within the file                       |
-| `--old-line <n>` | 1-based line number on the old side                       |
-| `--new-line <n>` | 1-based line number on the new side                       |
-| `--next-comment` | jump to the next annotated hunk                           |
-| `--prev-comment` | jump to the previous annotated hunk                       |
-| `--json`         | emit structured JSON                                      |
+| Option           | Description                                                          |
+| ---------------- | -------------------------------------------------------------------- |
+| `--file <path>`  | diff file path as shown by Hunk                                      |
+| `--repo <path>`  | target the live session whose active tab repo root matches this path |
+| `--hunk <n>`     | 1-based hunk number within the file                                  |
+| `--old-line <n>` | 1-based line number on the old side                                  |
+| `--new-line <n>` | 1-based line number on the new side                                  |
+| `--next-comment` | jump to the next annotated hunk                                      |
+| `--prev-comment` | jump to the previous annotated hunk                                  |
+| `--json`         | emit structured JSON                                                 |
 
 **Positionals:** `[sessionId]`.
 
@@ -298,12 +298,12 @@ hunk session reload (<session-id> | --repo <path> | --session-path <path>) [--so
 hunk session reload (<session-id> | --repo <path> | --session-path <path>) [--source <path>] [--json] -- show [ref] [-- <pathspec...>]
 ```
 
-| Option                  | Description                                                    |
-| ----------------------- | -------------------------------------------------------------- |
-| `--repo <path>`         | target the live session whose repo root matches this path      |
-| `--session-path <path>` | target a live session rooted at a different path               |
-| `--source <path>`       | load the diff from this directory instead of the session's own |
-| `--json`                | emit structured JSON                                           |
+| Option                  | Description                                                          |
+| ----------------------- | -------------------------------------------------------------------- |
+| `--repo <path>`         | target the live session whose active tab repo root matches this path |
+| `--session-path <path>` | target a live session rooted at a different path                     |
+| `--source <path>`       | load the diff from this directory instead of the session's own       |
+| `--json`                | emit structured JSON                                                 |
 
 **Positionals:** `[sessionId]`.
 
@@ -318,6 +318,83 @@ hunk session reload --repo /path/to/worktree -- diff
 hunk session reload --session-path /path/to/live-window --source /path/to/other-checkout -- diff
 ```
 
+### `hunk session tab add`
+
+open a named project review in a new tab
+
+```bash
+hunk session tab add (<session-id> | --repo <path> | --session-path <path>) --name <name> --source <path> [--json] -- diff [ref] [-- <pathspec...>]
+hunk session tab add (<session-id> | --repo <path> | --session-path <path>) --name <name> --source <path> [--json] -- show [ref] [-- <pathspec...>]
+```
+
+| Option                  | Description                                                          |
+| ----------------------- | -------------------------------------------------------------------- |
+| `--repo <path>`         | target the live session whose active tab repo root matches this path |
+| `--session-path <path>` | target the live Hunk process launched from this path                 |
+| `--name <name>`         | unique tab name Required.                                            |
+| `--source <path>`       | project directory used to load the new review Required.              |
+| `--json`                | emit structured JSON                                                 |
+
+**Positionals:** `[sessionId]`.
+
+**Examples:**
+
+```bash
+hunk session tab add --session-path /path/to/hunk-window --name "api" --source /path/to/api -- diff main...feature
+```
+
+### `hunk session tab select`
+
+activate one review tab by id or unique name
+
+```bash
+hunk session tab select (<session-id> | --repo <path> | --session-path <path>) --tab <tab> [--json]
+```
+
+| Option                  | Description                                                          |
+| ----------------------- | -------------------------------------------------------------------- |
+| `--repo <path>`         | target the live session whose active tab repo root matches this path |
+| `--session-path <path>` | target the live Hunk process launched from this path                 |
+| `--tab <tab>`           | tab id or unique name Required.                                      |
+| `--json`                | emit structured JSON                                                 |
+
+**Positionals:** `[sessionId]`.
+
+### `hunk session tab rename`
+
+rename one review tab
+
+```bash
+hunk session tab rename (<session-id> | --repo <path> | --session-path <path>) --tab <tab> --name <name> [--json]
+```
+
+| Option                  | Description                                                          |
+| ----------------------- | -------------------------------------------------------------------- |
+| `--repo <path>`         | target the live session whose active tab repo root matches this path |
+| `--session-path <path>` | target the live Hunk process launched from this path                 |
+| `--tab <tab>`           | tab id or unique name Required.                                      |
+| `--name <name>`         | new unique tab name Required.                                        |
+| `--json`                | emit structured JSON                                                 |
+
+**Positionals:** `[sessionId]`.
+
+### `hunk session tab close`
+
+close one review tab
+
+```bash
+hunk session tab close (<session-id> | --repo <path> | --session-path <path>) --tab <tab> [--json]
+```
+
+| Option                  | Description                                                          |
+| ----------------------- | -------------------------------------------------------------------- |
+| `--repo <path>`         | target the live session whose active tab repo root matches this path |
+| `--session-path <path>` | target the live Hunk process launched from this path                 |
+| `--tab <tab>`           | tab id or unique name Required.                                      |
+| `--json`                | emit structured JSON                                                 |
+
+**Positionals:** `[sessionId]`.
+
 ### `hunk session comment add`
 
 attach one live inline review note
@@ -326,18 +403,18 @@ attach one live inline review note
 hunk session comment add (<session-id> | --repo <path>) --file <path> (--old-line <n> | --new-line <n>) --summary <text> [--rationale <text>] [--author <name>] [--markup <stml>] [--focus] [--json]
 ```
 
-| Option               | Description                                               |
-| -------------------- | --------------------------------------------------------- |
-| `--file <path>`      | diff file path as shown by Hunk Required.                 |
-| `--summary <text>`   | short review note Required.                               |
-| `--repo <path>`      | target the live session whose repo root matches this path |
-| `--old-line <n>`     | 1-based line number on the old side                       |
-| `--new-line <n>`     | 1-based line number on the new side                       |
-| `--rationale <text>` | optional longer explanation                               |
-| `--markup <stml>`    | experimental STML body (target session must opt in)       |
-| `--author <name>`    | optional author label                                     |
-| `--focus`            | add the note and focus the viewport on it                 |
-| `--json`             | emit structured JSON                                      |
+| Option               | Description                                                          |
+| -------------------- | -------------------------------------------------------------------- |
+| `--file <path>`      | diff file path as shown by Hunk Required.                            |
+| `--summary <text>`   | short review note Required.                                          |
+| `--repo <path>`      | target the live session whose active tab repo root matches this path |
+| `--old-line <n>`     | 1-based line number on the old side                                  |
+| `--new-line <n>`     | 1-based line number on the new side                                  |
+| `--rationale <text>` | optional longer explanation                                          |
+| `--markup <stml>`    | experimental STML body (target session must opt in)                  |
+| `--author <name>`    | optional author label                                                |
+| `--focus`            | add the note and focus the viewport on it                            |
+| `--json`             | emit structured JSON                                                 |
 
 **Positionals:** `[sessionId]`.
 
@@ -357,12 +434,12 @@ apply many live inline review notes from stdin JSON
 hunk session comment apply (<session-id> | --repo <path>) --stdin [--focus] [--json]
 ```
 
-| Option          | Description                                               |
-| --------------- | --------------------------------------------------------- |
-| `--repo <path>` | target the live session whose repo root matches this path |
-| `--stdin`       | read the comment batch from stdin as JSON                 |
-| `--focus`       | apply the batch and focus the first note                  |
-| `--json`        | emit structured JSON                                      |
+| Option          | Description                                                          |
+| --------------- | -------------------------------------------------------------------- |
+| `--repo <path>` | target the live session whose active tab repo root matches this path |
+| `--stdin`       | read the comment batch from stdin as JSON                            |
+| `--focus`       | apply the batch and focus the first note                             |
+| `--json`        | emit structured JSON                                                 |
 
 **Positionals:** `[sessionId]`.
 
@@ -397,12 +474,12 @@ list live inline review notes
 hunk session comment list (<session-id> | --repo <path>) [--file <path>] [--type <live|all|ai|agent|user>] [--json]
 ```
 
-| Option          | Description                                               |
-| --------------- | --------------------------------------------------------- |
-| `--repo <path>` | target the live session whose repo root matches this path |
-| `--file <path>` | filter comments to one diff file                          |
-| `--type <type>` | filter to live, all, ai, agent, or user comments          |
-| `--json`        | emit structured JSON                                      |
+| Option          | Description                                                          |
+| --------------- | -------------------------------------------------------------------- |
+| `--repo <path>` | target the live session whose active tab repo root matches this path |
+| `--file <path>` | filter comments to one diff file                                     |
+| `--type <type>` | filter to live, all, ai, agent, or user comments                     |
+| `--json`        | emit structured JSON                                                 |
 
 **Positionals:** `[sessionId]`.
 
@@ -414,10 +491,10 @@ remove one inline review note
 hunk session comment rm (<session-id> | --repo <path>) <comment-id> [--json]
 ```
 
-| Option          | Description                                               |
-| --------------- | --------------------------------------------------------- |
-| `--repo <path>` | target the live session whose repo root matches this path |
-| `--json`        | emit structured JSON                                      |
+| Option          | Description                                                          |
+| --------------- | -------------------------------------------------------------------- |
+| `--repo <path>` | target the live session whose active tab repo root matches this path |
+| `--json`        | emit structured JSON                                                 |
 
 **Positionals:** `[targets...]` — &lt;session-id&gt; &lt;comment-id&gt;, or &lt;comment-id&gt; with --repo.
 
@@ -429,13 +506,13 @@ clear inline review notes
 hunk session comment clear (<session-id> | --repo <path>) [--file <path>] [--include-user|--all] --yes [--json]
 ```
 
-| Option           | Description                                               |
-| ---------------- | --------------------------------------------------------- |
-| `--repo <path>`  | target the live session whose repo root matches this path |
-| `--file <path>`  | clear only one diff file's comments                       |
-| `--include-user` | also clear human notes created with the TUI `c` action    |
-| `--all`          | clear both live agent comments and human user notes       |
-| `--yes`          | confirm destructive comment clearing                      |
-| `--json`         | emit structured JSON                                      |
+| Option           | Description                                                          |
+| ---------------- | -------------------------------------------------------------------- |
+| `--repo <path>`  | target the live session whose active tab repo root matches this path |
+| `--file <path>`  | clear only one diff file's comments                                  |
+| `--include-user` | also clear human notes created with the TUI `c` action               |
+| `--all`          | clear both live agent comments and human user notes                  |
+| `--yes`          | confirm destructive comment clearing                                 |
+| `--json`         | emit structured JSON                                                 |
 
 **Positionals:** `[sessionId]`.

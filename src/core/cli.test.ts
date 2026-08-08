@@ -557,6 +557,86 @@ describe("parseCli", () => {
     ).rejects.toThrow("Pass the replacement Hunk command after `--`");
   });
 
+  test("parses session tab add with an explicit project and review range", async () => {
+    const parsed = await parseCli([
+      "bun",
+      "hunk",
+      "session",
+      "tab",
+      "add",
+      "session-1",
+      "--name",
+      "api review",
+      "--source",
+      "/tmp/api",
+      "--json",
+      "--",
+      "diff",
+      "main...feature",
+      "--",
+      "src",
+    ]);
+
+    expect(parsed).toEqual({
+      kind: "session",
+      action: "tab-add",
+      selector: { sessionId: "session-1" },
+      name: "api review",
+      sourcePath: resolve("/tmp/api"),
+      input: {
+        kind: "vcs",
+        range: "main...feature",
+        staged: false,
+        pathspecs: ["src"],
+        options: {},
+      },
+      output: "json",
+    });
+  });
+
+  test.each([
+    ["select", { action: "tab-select", tab: "tab-2" }],
+    ["rename", { action: "tab-rename", tab: "api", name: "backend" }],
+    ["close", { action: "tab-close", tab: "tab-2" }],
+  ] as const)("parses session tab %s", async (command, expected) => {
+    const parsed = await parseCli([
+      "bun",
+      "hunk",
+      "session",
+      "tab",
+      command,
+      "--session-path",
+      "/tmp/live-window",
+      "--tab",
+      expected.tab,
+      ...(command === "rename" && "name" in expected ? ["--name", expected.name] : []),
+    ]);
+
+    expect(parsed).toMatchObject({
+      kind: "session",
+      ...expected,
+      selector: { sessionPath: resolve("/tmp/live-window") },
+      output: "text",
+    });
+  });
+
+  test("rejects session tab add without a nested review command", async () => {
+    await expect(
+      parseCli([
+        "bun",
+        "hunk",
+        "session",
+        "tab",
+        "add",
+        "session-1",
+        "--name",
+        "api",
+        "--source",
+        "/tmp/api",
+      ]),
+    ).rejects.toThrow("Pass the new tab's Hunk review command after `--`");
+  });
+
   test("parses session comment add without focusing by default", async () => {
     const parsed = await parseCli([
       "bun",

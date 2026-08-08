@@ -4,7 +4,7 @@ import type {
   ExtensionFileChangeRange,
   ExtensionFileViewRow,
   ExtensionFileViewSpan,
-} from "hunkdiff/extension";
+} from "@victor-software-house/hunk/extension";
 
 const MAX_MARKDOWN_SOURCE_LENGTH = 200_000;
 

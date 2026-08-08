@@ -7,7 +7,7 @@ object. An entry may stand alone or be declared by a folder's optional
 
 ```ts
 // ~/.config/hunk/extensions/hello.ts
-import type { HunkExtensionAPI } from "hunkdiff/extension";
+import type { HunkExtensionAPI } from "@victor-software-house/hunk/extension";
 
 export default function (hunk: HunkExtensionAPI) {
   hunk.on("startup", (_event, ctx) => {
@@ -17,7 +17,7 @@ export default function (hunk: HunkExtensionAPI) {
 ```
 
 > **The extension API is experimental.** Everything below works today, but the
-> `hunkdiff/extension` surface may change in breaking ways between minor
+> `@victor-software-house/hunk/extension` surface may change in breaking ways between minor
 > releases while it stabilizes against real third-party extensions. Breaking
 > changes will be called out in release notes, and `hunk.apiVersion` identifies
 > the surface an extension was written against.
@@ -268,6 +268,12 @@ optional, and each optional field buys one thing:
 | `sourceCacheKey` | stable source-snapshot identity for highlight reuse across reloads |
 | `extraFiles`     | files reviewed outside the patch, including skipped placeholders   |
 
+An adapter may also implement `loadHistory(context)` for review navigators. It
+returns bounded local commits plus branch, remote-branch, and tag refs; Hunk
+contains failures and exposes the result through `ctx.review.loadHistory()`.
+This capability is read-only and independent of the three review operations.
+The bundled Git adapter is the reference implementation.
+
 `untrackedPaths` is the shorthand: list the repo-root-relative paths your VCS
 reports as unknown and Hunk synthesizes the added-file diffs for you, skipping
 binaries and files too large to render. Honor `input.options.excludeUntracked`
@@ -300,7 +306,7 @@ silently changes how an existing repository is reviewed. Set
 `detectionPriority` explicitly to outrank a shipped backend; it is your machine.
 
 ```ts
-import { HUNK_CORE_VCS_DETECTION_PRIORITY } from "hunkdiff/extension";
+import { HUNK_CORE_VCS_DETECTION_PRIORITY } from "@victor-software-house/hunk/extension";
 
 hunk.registerVcsAdapter({
   id: "hg",
@@ -452,7 +458,7 @@ Hunk prints the message without a stack trace and lists the suggestions beneath
 it. Anything else is reported as an unexpected error.
 
 ```ts
-import { HunkExtensionUserError } from "hunkdiff/extension";
+import { HunkExtensionUserError } from "@victor-software-house/hunk/extension";
 
 throw new HunkExtensionUserError("`hunk stash show` is not supported by Mercurial.", {
   suggestions: ["Use `hunk show <rev>` to review a commit instead."],
@@ -476,7 +482,10 @@ can be open at once. Pair it with `registerCommand` so a key opens it:
 ```tsx
 // ~/.config/hunk/extensions/flat-sidebar.tsx
 import { useMemo } from "react";
-import type { ExtensionSidebarViewProps, HunkExtensionAPI } from "hunkdiff/extension";
+import type {
+  ExtensionSidebarViewProps,
+  HunkExtensionAPI,
+} from "@victor-software-house/hunk/extension";
 
 function FlatSidebar({ files, selectedFileId, theme, actions }: ExtensionSidebarViewProps) {
   const ordered = useMemo(() => [...files].sort((a, b) => a.path.localeCompare(b.path)), [files]);
@@ -561,7 +570,10 @@ chord. Like Pi's injected `KeybindingsManager`, this keeps local component
 behavior synchronized with the user's remaps and unbindings:
 
 ```ts
-import type { ExtensionKeyEvent, ExtensionSidebarViewProps } from "hunkdiff/extension";
+import type {
+  ExtensionKeyEvent,
+  ExtensionSidebarViewProps,
+} from "@victor-software-house/hunk/extension";
 
 export function handleSidebarKey(props: ExtensionSidebarViewProps, key: ExtensionKeyEvent) {
   const nextFile = props.files[1];
@@ -605,7 +617,7 @@ scroll the selected row into view from an effect:
 ```tsx
 import { useEffect, useRef } from "react";
 import type { ScrollBoxRenderable } from "@opentui/core";
-import type { ExtensionSidebarViewProps } from "hunkdiff/extension";
+import type { ExtensionSidebarViewProps } from "@victor-software-house/hunk/extension";
 
 function HunkList({
   files,
@@ -670,7 +682,7 @@ anything beyond this surface — `useTerminalDimensions` from `@opentui/react`
 serves as its pre-first-layout viewport estimate).
 
 One honest caveat: this contract rides on OpenTUI's renderable API, served at
-whatever version Hunk pins — a wider surface than `hunkdiff/extension` itself.
+whatever version Hunk pins — a wider surface than `@victor-software-house/hunk/extension` itself.
 The built-in sidebar exercising the exact same calls is the compatibility
 guarantee: a change that breaks your scroll code breaks Hunk's own sidebar
 first. Still, keep scroll handling small and behind your own helpers.
@@ -692,7 +704,7 @@ accumulating even when the pane is closed.
 
 ```tsx
 import { useSyncExternalStore } from "react";
-import type { HunkExtensionAPI } from "hunkdiff/extension";
+import type { HunkExtensionAPI } from "@victor-software-house/hunk/extension";
 
 let viewedPaths: ReadonlySet<string> = new Set();
 const listeners = new Set<() => void>();
@@ -748,7 +760,7 @@ or loaded by default; copy the folder into `~/.config/hunk/extensions/`, install
 its dependency there, and its View entry and `F8` command become available.
 
 ```ts
-import type { HunkExtensionAPI } from "hunkdiff/extension";
+import type { HunkExtensionAPI } from "@victor-software-house/hunk/extension";
 
 export default function (hunk: HunkExtensionAPI) {
   hunk.registerFileView({
@@ -845,7 +857,7 @@ otherwise keep painting its first answer. Flip the state, then ask for the
 re-derivation:
 
 ```ts
-import type { HunkExtensionAPI } from "hunkdiff/extension";
+import type { HunkExtensionAPI } from "@victor-software-house/hunk/extension";
 
 export default function (hunk: HunkExtensionAPI) {
   let expanded = false;
@@ -956,7 +968,7 @@ sidebar one-off: they are the same mechanism Hunk's own shortcuts dispatch
 through — one table, one loop, built-ins first.
 
 ```ts
-import type { HunkExtensionAPI } from "hunkdiff/extension";
+import type { HunkExtensionAPI } from "@victor-software-house/hunk/extension";
 
 export default function (hunk: HunkExtensionAPI) {
   hunk.registerCommand({ id: "hello", title: "Say hello", key: "ctrl+g" }, (ctx) => {
@@ -1052,6 +1064,45 @@ hunk index is clamped into the file's real range.
 
 A handler may be async; a failure (sync or rejected) becomes a warning naming
 your extension.
+
+#### Review ranges
+
+`ctx.review` exposes the current VCS comparison range and can replace it through
+Hunk's own reload boundary:
+
+```ts
+hunk.registerCommand({ id: "compare-main", title: "Compare main to HEAD" }, async (ctx) => {
+  if (!ctx.review.range.available) {
+    ctx.notify(ctx.review.range.detail, "warning");
+    return;
+  }
+
+  const result = await ctx.review.setRange("main...HEAD");
+  if (!result.ok) ctx.notify(result.detail, "warning");
+});
+```
+
+`range` is a snapshot from when the command context or sidebar props were built.
+An available value is absent for a working-tree review and contains the current
+range for a range review. Non-VCS and non-reloadable sessions carry
+`available: false` with a displayable reason.
+
+`setRange(range)` trims and requires a non-empty range, then performs the same
+bounded soft reload as Hunk's refresh path while preserving the current layout,
+theme, notes, line numbers, menu, and wrapping choices. It keeps the current VCS
+backend and pathspecs, clears `--staged`, validates the reload against the
+session's original root, refreshes daemon state, and emits ordinary reload
+events. An unsupported session resolves `unavailable`; a VCS or reload failure
+resolves `failed`. Malformed arguments reject as extension bugs.
+
+Custom sidebar views receive the same capability as `props.review`, so a
+navigator can change ranges without shelling out or bypassing Hunk's session
+policy. `ctx.review.loadHistory()` (and the sidebar equivalent) resolves either
+`{ ok: true, history: { commits, refs } }` or an `unavailable` / `failed`
+result. Commit rows carry id, parents, subject, and ISO commit time; refs carry
+a selectable name, kind, target commit, and current-branch marker. An active
+backend that does not implement history reports `unavailable` rather than
+falling back to Git behind its back.
 
 #### Asking the user
 
@@ -1274,7 +1325,7 @@ extension emits while factories are loading are queued until every extension
 has had a chance to subscribe.
 
 ```ts
-import type { HunkExtensionAPI } from "hunkdiff/extension";
+import type { HunkExtensionAPI } from "@victor-software-house/hunk/extension";
 
 export default function (hunk: HunkExtensionAPI) {
   hunk.events.on<{ fileCount: number }>("summary:ready", (payload, ctx) => {
@@ -1350,7 +1401,7 @@ files were hidden.
 
 ```ts
 // ~/.config/hunk/extensions/collapse-generated.ts
-import type { HunkExtensionAPI } from "hunkdiff/extension";
+import type { HunkExtensionAPI } from "@victor-software-house/hunk/extension";
 
 /** Match one path against a `*`-only glob, anchored at both ends. */
 function matchesPattern(path: string, pattern: string) {

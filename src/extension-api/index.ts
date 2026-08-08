@@ -1,10 +1,10 @@
 /**
- * Public authoring surface for Hunk extensions, published as `hunkdiff/extension`.
+ * Public authoring surface for Hunk extensions, published as `@victor-software-house/hunk/extension`.
  *
  * Extensions import types from here and default-export a factory:
  *
  * ```ts
- * import type { HunkExtensionAPI } from "hunkdiff/extension";
+ * import type { HunkExtensionAPI } from "@victor-software-house/hunk/extension";
  *
  * export default function (hunk: HunkExtensionAPI) {
  *   hunk.registerFileLanguage(".prisma", "graphql");
@@ -20,7 +20,7 @@
  * maps them back to `./types.ts` when compiling this repo, and emission copies
  * them verbatim into the published declarations — where `moduleResolution:
  * "nodenext"` consumers *require* an explicit extension. Dropping it makes the
- * published `hunkdiff/extension` types fail to resolve for every ESM consumer.
+ * published `@victor-software-house/hunk/extension` types fail to resolve for every ESM consumer.
  */
 export { matchesKey, matchesKeyChord, parseKeyChord } from "./keys.js";
 export type { ParsedKeyChord } from "./keys.js";
@@ -66,6 +66,13 @@ export type {
   ExtensionCommand,
   ExtensionCommandContext,
   ExtensionCommandHandler,
+  ExtensionReviewControls,
+  ExtensionReviewHistory,
+  ExtensionReviewHistoryCommit,
+  ExtensionReviewHistoryRef,
+  ExtensionReviewHistoryResult,
+  ExtensionReviewRangeResult,
+  ExtensionReviewRangeState,
   ExtensionReviewSelection,
   ExtensionConfirmOptions,
   ExtensionDialogs,

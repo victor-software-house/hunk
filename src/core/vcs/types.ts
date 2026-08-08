@@ -1,5 +1,6 @@
 import type { BuildDiffFileOptions } from "../diffFile";
 import type { WatchPlan } from "../watchPlan";
+import type { ExtensionReviewHistory } from "../../extension-api/types";
 import type {
   DiffFile,
   VcsShowCommandInput,
@@ -66,6 +67,8 @@ export interface VcsAdapter {
   name: string;
   detect(cwd: string): VcsDetection | null;
   operations: VcsOperations;
+  /** Optional read-only local history for review navigators. */
+  loadHistory?: (context: VcsLoadContext) => Promise<ExtensionReviewHistory>;
   /** Detection order weight; higher is consulted first. See the public contract. */
   detectionPriority?: number;
 }

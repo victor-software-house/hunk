@@ -5,7 +5,7 @@ import { matchesKeyChord, parseKeyChord, type ParsedKeyChord } from "../extensio
  * Key-chord parsing and matching for the command registry.
  *
  * The grammar itself lives in `src/extension-api/keys.ts` because extensions
- * need it too — it is published as part of `hunkdiff/extension` — and is
+ * need it too — it is published as part of `@victor-software-house/hunk/extension` — and is
  * re-exported here so internal code keeps importing key handling from one
  * place. What stays local is what extensions have no use for: synthesizing the
  * event a chord describes, which only conflict detection needs.

@@ -1,5 +1,5 @@
 /**
- * The public contract behind `hunkdiff/extension`.
+ * The public contract behind `@victor-software-house/hunk/extension`.
  *
  * This module imports nothing on purpose. Whole-program declaration emission
  * ships every file the entry point reaches, so any import here would publish a
@@ -795,6 +795,8 @@ export interface ExtensionVcsAdapter {
    * priorities fall back to registration order.
    */
   detectionPriority?: number;
+  /** Optional read-only history used by review navigators. */
+  loadHistory?(context: ExtensionVcsLoadContext): Promise<ExtensionReviewHistory>;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -894,6 +896,8 @@ export interface ExtensionSidebarKeybindings {
 
 /** Everything a custom sidebar component receives, refreshed as the app changes. */
 export interface ExtensionSidebarViewProps {
+  /** Whether this review tab currently owns process keyboard input. */
+  readonly active?: boolean;
   /**
    * The reviewed files currently visible, in review-stream order.
    *
@@ -908,6 +912,8 @@ export interface ExtensionSidebarViewProps {
   theme: ExtensionSidebarTheme;
   /** Resolved command bindings; use these instead of hard-coding sidebar chords. */
   keybindings: ExtensionSidebarKeybindings;
+  /** Host-owned review-range state and replacement. */
+  review: ExtensionReviewControls;
   actions: ExtensionSidebarActions;
 }
 
@@ -1118,6 +1124,59 @@ export interface ExtensionReviewSelection {
   readonly hunkIndex: number | null;
 }
 
+/** Whether this session can replace its current VCS comparison range. */
+export type ExtensionReviewRangeState =
+  | { available: true; value?: string }
+  | { available: false; detail: string };
+
+/** How one host-mediated review-range replacement settled. */
+export type ExtensionReviewRangeResult =
+  | { ok: true }
+  | { ok: false; reason: "unavailable" | "failed"; detail: string };
+
+/** One commit in the active VCS backend's bounded local history. */
+export interface ExtensionReviewHistoryCommit {
+  id: string;
+  parentIds: readonly string[];
+  subject: string;
+  committedAt: string;
+}
+
+/** One local branch, remote branch, or tag pointing into the returned history. */
+export interface ExtensionReviewHistoryRef {
+  name: string;
+  kind: "branch" | "remote" | "tag";
+  commitId: string;
+  current?: boolean;
+}
+
+/** Read-only history available to a review navigator. */
+export interface ExtensionReviewHistory {
+  commits: readonly ExtensionReviewHistoryCommit[];
+  refs: readonly ExtensionReviewHistoryRef[];
+}
+
+/** How an adapter-backed history request settled. */
+export type ExtensionReviewHistoryResult =
+  | { ok: true; history: ExtensionReviewHistory }
+  | { ok: false; reason: "unavailable" | "failed"; detail: string };
+
+/** Inspect and replace the current VCS comparison range through Hunk's reload boundary. */
+export interface ExtensionReviewControls {
+  /** Snapshot of the range state when these controls were created. */
+  readonly range: ExtensionReviewRangeState;
+  /**
+   * Replace the current review with one VCS range, preserving the active Hunk view.
+   *
+   * A blank or non-string range rejects as an extension bug. Unsupported review
+   * kinds resolve `unavailable`; a VCS or reload failure resolves `failed` with
+   * displayable detail.
+   */
+  setRange(range: string): Promise<ExtensionReviewRangeResult>;
+  /** Load bounded local history through the active VCS adapter. */
+  loadHistory(): Promise<ExtensionReviewHistoryResult>;
+}
+
 /** One question put to the user as a modal confirm dialog. */
 export interface ExtensionConfirmOptions {
   title: string;
@@ -1306,6 +1365,8 @@ export interface ExtensionWorkspace {
 /** What a command handler receives when its key fires. */
 export interface ExtensionCommandContext extends ExtensionContext {
   sidebars: ExtensionSidebarControls;
+  /** Host-owned review-range state and replacement. */
+  readonly review: ExtensionReviewControls;
   /** Host-owned selection controls for alternate file presentations. */
   fileViews: ExtensionFileViewControls;
   /**

@@ -33,6 +33,7 @@ import {
   type ExtensionVcsWatchPlan,
   type HunkExtensionAPI,
 } from "../../../../extension-api/types";
+import { loadGitReviewHistory } from "./history";
 
 /**
  * Hunk's Git backend, as a bundled extension.
@@ -40,7 +41,7 @@ import {
  * Git is the backend that exercises every integration point there is — exact
  * file sources, skipped-too-large placeholders, untracked files, watch plans,
  * rich failures — so it is deliberately written the way a third-party backend
- * would be: it sees only the published `hunkdiff/extension` contract plus its
+ * would be: it sees only the published `@victor-software-house/hunk/extension` contract plus its
  * own implementation helpers in `src/core/vcs/git.ts`, `src/core/vcs/gitSource.ts`, and
  * `src/core/vcs/largeFile.ts`. Nothing here reaches into the diff engine or the
  * adapter registry. If something Git needs cannot be said in these types, the
@@ -314,6 +315,7 @@ export const GitVcsAdapter = {
   name: "Git",
   detect: detectGitRepo,
   detectionPriority: HUNK_CORE_VCS_DETECTION_PRIORITY,
+  loadHistory: loadGitReviewHistory,
   operations: {
     "working-tree-diff": {
       async load(input, { cwd, gitExecutable = "git" }) {

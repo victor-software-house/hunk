@@ -3,14 +3,14 @@
   "changelog": [
     "@changesets/changelog-github",
     {
-      "repo": "modem-dev/hunk",
+      "repo": "victor-software-house/hunk",
       "disableThanks": true
     }
   ],
   "commit": false,
   "fixed": [],
   "linked": [],
-  "access": "public",
+  "access": "restricted",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
   "ignore": [

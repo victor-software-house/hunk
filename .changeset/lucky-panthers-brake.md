@@ -1,5 +1,5 @@
 ---
-"hunkdiff": minor
+"@victor-software-house/hunk": minor
 ---
 
 Agent notes can now carry STML markup (**experimental**) — a small HTML-like markup rendered as real terminal UI inside the inline note card (bordered boxes, rows of shapes, gauges, lists, badges, code blocks, styled text). Provide it via the `markup` field on agent-context sidecar annotations, `hunk session comment add --markup`, or a `markup` field on `comment apply` batch items; the plain `summary` stays as the fallback and list view text. While the feature is experimental, the tag and color vocabulary may change between releases without a major bump.

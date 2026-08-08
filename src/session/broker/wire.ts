@@ -1,4 +1,6 @@
 import { EXPERIMENTAL_FEATURES, type ExperimentalFeature } from "../../core/experimental";
+import { parseCliInput } from "../../core/cliInputSchema";
+import { normalizeReviewTabName } from "../../core/reviewTabName";
 import type { CliInput } from "../../core/types";
 import {
   MAX_REGISTRATION_FILES,
@@ -13,6 +15,8 @@ import {
 } from "@hunk/session-broker-core";
 import type { HunkSessionRegistration, HunkSessionSnapshot } from "../types";
 import type {
+  HunkReviewTabInfo,
+  HunkReviewTabState,
   HunkSessionInfo,
   HunkSessionState,
   SessionLiveCommentSummary,
@@ -207,26 +211,39 @@ function parseSessionReviewNoteSummary(value: unknown): SessionReviewNoteSummary
   };
 }
 
-/** Parse the app-owned registration info embedded inside one broker registration envelope. */
-function parseHunkSessionInfo(value: unknown): HunkSessionInfo | null {
+/** Parse one registered review tab. */
+function parseHunkReviewTabInfo(value: unknown): HunkReviewTabInfo | null {
   const record = brokerWireParsers.asRecord(value);
   if (!record || !Array.isArray(record.files) || record.files.length > MAX_REGISTRATION_FILES) {
     return null;
   }
 
+  const tabId = brokerWireParsers.parseRequiredString(record.tabId);
+  const rawName = brokerWireParsers.parseRequiredString(record.name);
+  const cwd = brokerWireParsers.parseRequiredString(record.cwd);
+  const input = parseCliInput(record.input);
   const inputKind = parseReviewInputKind(record.inputKind);
   const title = brokerWireParsers.parseRequiredString(record.title);
   const sourceLabel = brokerWireParsers.parseRequiredString(record.sourceLabel);
-  if (inputKind === null || title === null || sourceLabel === null) {
+  if (!tabId || !rawName || !cwd || !input || !inputKind || !title || !sourceLabel) return null;
+  if (input.kind !== inputKind) return null;
+
+  let name: string;
+  try {
+    name = normalizeReviewTabName(rawName);
+  } catch {
     return null;
   }
 
   const files = record.files.map(parseSessionReviewFile);
-  if (files.some((file) => file === null)) {
-    return null;
-  }
+  if (files.some((file) => file === null)) return null;
 
   return {
+    tabId,
+    name,
+    cwd,
+    repoRoot: brokerWireParsers.parseOptionalString(record.repoRoot),
+    input,
     inputKind,
     title,
     sourceLabel,
@@ -235,8 +252,25 @@ function parseHunkSessionInfo(value: unknown): HunkSessionInfo | null {
   };
 }
 
-/** Parse the app-owned snapshot state embedded inside one broker snapshot envelope. */
-function parseHunkSessionState(value: unknown): HunkSessionState | null {
+/** Parse the app-owned registration info embedded inside one broker registration envelope. */
+function parseHunkSessionInfo(value: unknown): HunkSessionInfo | null {
+  const record = brokerWireParsers.asRecord(value);
+  const activeTabId = brokerWireParsers.parseRequiredString(record?.activeTabId);
+  if (!record || !activeTabId || !Array.isArray(record.tabs) || record.tabs.length === 0) {
+    return null;
+  }
+
+  const tabs = record.tabs.map(parseHunkReviewTabInfo);
+  if (tabs.some((tab) => tab === null)) return null;
+  const parsed = tabs as HunkReviewTabInfo[];
+  if (new Set(parsed.map((tab) => tab.tabId)).size !== parsed.length) return null;
+  if (new Set(parsed.map((tab) => tab.name)).size !== parsed.length) return null;
+  if (!parsed.some((tab) => tab.tabId === activeTabId)) return null;
+  return { activeTabId, tabs: parsed };
+}
+
+/** Parse one review tab's live state. */
+function parseHunkReviewTabState(value: unknown): HunkReviewTabState | null {
   const record = brokerWireParsers.asRecord(value);
   if (
     !record ||
@@ -247,11 +281,10 @@ function parseHunkSessionState(value: unknown): HunkSessionState | null {
     return null;
   }
 
+  const tabId = brokerWireParsers.parseRequiredString(record.tabId);
   const selectedHunkIndex = brokerWireParsers.parseNonNegativeInt(record.selectedHunkIndex);
   const showAgentNotes = typeof record.showAgentNotes === "boolean" ? record.showAgentNotes : null;
-  if (selectedHunkIndex === null || showAgentNotes === null) {
-    return null;
-  }
+  if (!tabId || selectedHunkIndex === null || showAgentNotes === null) return null;
 
   const liveComments = record.liveComments
     .map(parseSessionLiveCommentSummary)
@@ -261,6 +294,7 @@ function parseHunkSessionState(value: unknown): HunkSessionState | null {
     .filter((note): note is SessionReviewNoteSummary => note !== null);
 
   return {
+    tabId,
     selectedFileId: brokerWireParsers.parseOptionalString(record.selectedFileId),
     selectedFilePath: brokerWireParsers.parseOptionalString(record.selectedFilePath),
     selectedHunkIndex,
@@ -273,6 +307,22 @@ function parseHunkSessionState(value: unknown): HunkSessionState | null {
     reviewNoteCount: reviewNotes.length,
     reviewNotes,
   };
+}
+
+/** Parse the app-owned snapshot state embedded inside one broker snapshot envelope. */
+function parseHunkSessionState(value: unknown): HunkSessionState | null {
+  const record = brokerWireParsers.asRecord(value);
+  const activeTabId = brokerWireParsers.parseRequiredString(record?.activeTabId);
+  if (!record || !activeTabId || !Array.isArray(record.tabs) || record.tabs.length === 0) {
+    return null;
+  }
+
+  const tabs = record.tabs.map(parseHunkReviewTabState);
+  if (tabs.some((tab) => tab === null)) return null;
+  const parsed = tabs as HunkReviewTabState[];
+  if (new Set(parsed.map((tab) => tab.tabId)).size !== parsed.length) return null;
+  if (!parsed.some((tab) => tab.tabId === activeTabId)) return null;
+  return { activeTabId, tabs: parsed };
 }
 
 /** Parse one Hunk session registration payload from the websocket wire format. */

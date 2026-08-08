@@ -55,7 +55,7 @@ throws is rolled back to its pre-run registration counts
 
 ## Host-served runtime modules
 
-Extension files import `react`, `@opentui/*`, and `hunkdiff/extension` as
+Extension files import `react`, `@opentui/*`, and `@victor-software-house/hunk/extension` as
 host-served runtime modules (`src/extensions/hostRuntimeModules.ts`): a
 per-extension-directory Bun loader hook transpiles extension source and
 rewrites those specifiers to prefixed virtual modules backed by the host's
@@ -151,6 +151,16 @@ resolve reviewed file ids through the existing source fetcher, which retains
 ownership of caching and size limits. Missing or unreadable sources become
 `null`.
 
+`src/ui/lib/extensionReview.ts` owns the narrow `ctx.review` range policy. It
+exposes only whether the current input can express a VCS range, normalizes one
+non-empty range, and replaces that field while preserving the VCS input's
+pathspecs and options. `App` supplies the live action through its existing soft
+reload path, so extensions never receive raw `CliInput` or an unbounded reload
+callback; `AppHost` still enforces launch authority, filesystem bounds, config
+normalization, daemon registration, and lifecycle events. The same controls are
+passed to command handlers and sidebar props so visual navigators and commands
+share one reload contract.
+
 Writes are limited to reloadable working-tree reviews and reviewed paths inside
 the review root. App supplies the current input, unfiltered changeset, and root
 through refs so soft reloads update the policy inputs. The host verifies the
@@ -162,7 +172,7 @@ command's `defaultKeys` against the user's `[keybindings]` table (user config
 layer only) into one id-to-chords answer, from which matchers, key labels, and
 conflict probes are all derived — a user-bound chord is exclusive, so whatever
 held it by default gives it up. The chord grammar itself lives in
-`src/extension-api/keys.ts` because it is published as `hunkdiff/extension`
+`src/extension-api/keys.ts` because it is published as `@victor-software-house/hunk/extension`
 (`matchesKey`, `parseKeyChord`, `matchesKeyChord`) for extension components
 that need internal keys; `src/lib/commandKeys.ts` re-exports it inward and
 keeps the host-only pieces.
@@ -182,6 +192,11 @@ none — which is why the visible menu list is derived from the menus record
 
 ## VCS adapters
 
+Review history is an optional adapter capability beside review operations. The
+public rows contain only bounded commit/ref identity and presentation metadata;
+`src/extensions/default/vcs/git/history.ts` is the bundled reference. Hunk never
+silently runs Git history for a session owned by another backend.
+
 `src/core/vcs/index.ts` is the single assembly point ordering bundled + user
 adapters by `detectionPriority` (Git is the baseline at 0; jj 200 / sl 100
 sit above it for colocated checkouts — the constants in
@@ -195,7 +210,7 @@ expressed publicly is a real gap in the contract.
 
 ## Public contract rules
 
-The authoring surface is the `hunkdiff/extension` export — a façade over
+The authoring surface is the `@victor-software-house/hunk/extension` export — a façade over
 internal types, declared in `src/extension-api/types.ts`. That module must
 stay import-free: declaration emission ships every module the entry reaches,
 so an import there publishes Hunk internals (`scripts/check-pack.ts` fails

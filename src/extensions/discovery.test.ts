@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { discoverExtensions } from "./discovery";
@@ -102,6 +102,28 @@ describe("extension discovery", () => {
     });
 
     expect(candidates).toEqual([{ id: "dual", path: typescriptIndex, origin: "flag" }]);
+  });
+
+  test("deduplicates one extension reached through canonical and symlinked paths", () => {
+    const root = createTempDir("hunk-ext-symlink-dedupe-");
+    const repo = join(root, "repo");
+    mkdirSync(join(repo, ".git"), { recursive: true });
+    const extension = writeExtensionFile(repo, ".hunk", "extensions", "fixture.ts");
+    const alias = join(root, "alias");
+    symlinkSync(repo, alias, "dir");
+
+    const candidates = discoverExtensions({
+      cwd: repo,
+      repoRoot: repo,
+      globalExtensionsDir: undefined,
+      flagPaths: [join(alias, ".hunk", "extensions", "fixture.ts")],
+      env: {},
+    });
+
+    expect(candidates).toEqual([
+      { id: "fixture", path: join(alias, ".hunk", "extensions", "fixture.ts"), origin: "flag" },
+    ]);
+    expect(extension).not.toBe(candidates[0]?.path);
   });
 
   test("orders flag, user config, global, then repo-local sources", () => {

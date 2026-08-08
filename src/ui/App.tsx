@@ -5,7 +5,17 @@ import {
 } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/react";
 import { writeFile } from "node:fs/promises";
-import { Fragment, Suspense, lazy, useCallback, useEffect, useMemo, useState, useRef } from "react";
+import {
+  Fragment,
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+  type ReactNode,
+} from "react";
 import {
   diffPersistedViewPreferences,
   saveGlobalViewPreferences,
@@ -22,6 +32,7 @@ import type {
   UserNoteLineTarget,
 } from "../core/types";
 import { canReloadInput } from "../core/inputReload";
+import { getConfiguredVcsAdapter } from "../core/vcs";
 import { sanitizeTerminalLine } from "../lib/terminalText";
 import { resolveExtensionCommands, resolveExtensionFileViews } from "../extensions/apply";
 import {
@@ -35,7 +46,10 @@ import type {
   ExtensionEventContext,
   ExtensionFileSide,
   ExtensionNotifyType,
+  ExtensionReviewControls,
+  ExtensionReviewHistoryResult,
   ExtensionReviewNote,
+  ExtensionReviewRangeResult,
   ExtensionSidebarControls,
   ExtensionWorkspace,
   ExtensionWorkspaceWriteRequest,
@@ -64,7 +78,7 @@ import type { ActiveAddNoteAffordance } from "./diff/PierreDiffView";
 import { useAppKeyboardShortcuts } from "./hooks/useAppKeyboardShortcuts";
 import { useExtensionDialogController } from "./hooks/useExtensionDialogController";
 import { useExtensionNotifications } from "./hooks/useExtensionNotifications";
-import { useHunkSessionBridge } from "./hooks/useHunkSessionBridge";
+import { useHunkSessionBridge, type HunkSessionBinding } from "./hooks/useHunkSessionBridge";
 import { useMenuController } from "./hooks/useMenuController";
 import { useReviewController, type AgentNoteGeometrySnapshot } from "./hooks/useReviewController";
 import { useWatchedInput, type WatchedInputRuntime } from "./hooks/useWatchedInput";
@@ -79,6 +93,11 @@ import { buildExtensionAppCommands, extensionCommandKeyDefaults } from "./lib/ex
 import { createGuardedReviewNavigation } from "./lib/extensionNavigation";
 import type { LineCursor } from "./lib/lineCursors";
 import { buildExtensionReviewSelection } from "./lib/extensionSelection";
+import {
+  normalizeExtensionReviewRange,
+  resolveExtensionReviewRangeState,
+  withExtensionReviewRange,
+} from "./lib/extensionReview";
 import { useFilePresentationController } from "./fileViews/useFilePresentationController";
 import { useFilePresentationRendering } from "./fileViews/useFilePresentationRendering";
 import { createExtensionSidebarKeybindings, resolveCommandKeys } from "./lib/keymap";
@@ -172,22 +191,30 @@ function withCurrentViewOptions(
 
 /** Orchestrate global app state, layout, navigation, and pane coordination. */
 export function App({
+  active = true,
   bootstrap,
   hostClient,
   noticeText,
   onQuit = () => process.exit(0),
+  onOpenNewReviewTab,
   onReloadSession,
+  reviewTabs,
   watchRuntime,
+  sessionBinding,
 }: {
+  active?: boolean;
   bootstrap: AppBootstrap;
   hostClient?: HunkSessionBrokerClient;
   noticeText?: string | null;
   onQuit?: () => void;
+  onOpenNewReviewTab?: () => void;
   onReloadSession: (
     nextInput: CliInput,
     options?: ReloadSessionOptions,
   ) => Promise<ReloadedSessionResult>;
+  reviewTabs?: ReactNode;
   watchRuntime?: WatchedInputRuntime;
+  sessionBinding?: HunkSessionBinding;
 }) {
   const SIDEBAR_MIN_WIDTH = 22;
   const SIDEBAR_DEFAULT_WIDTH = 34;
@@ -608,6 +635,20 @@ export function App({
    */
   const reloadAfterWorkspaceWriteRef = useRef<() => void>(() => {});
 
+  /**
+   * Replace the current review range through the same late-bound reload path.
+   *
+   * Command contexts are created above the concrete callback so they receive a
+   * stable host capability rather than closing over one render's input.
+   */
+  const setExtensionReviewRangeRef = useRef<(range: string) => Promise<ExtensionReviewRangeResult>>(
+    async () => ({
+      ok: false,
+      reason: "unavailable",
+      detail: "The review range controls are not ready.",
+    }),
+  );
+
   const {
     accept: acceptExtensionDialog,
     cancel: cancelExtensionDialog,
@@ -722,6 +763,54 @@ export function App({
     [createExtensionDialogs],
   );
 
+  /** Build review-range controls from a current-state snapshot and a live reload action. */
+  const createReviewControls = useCallback(
+    (): ExtensionReviewControls =>
+      Object.freeze({
+        range: resolveExtensionReviewRangeState(bootstrap.input),
+        setRange(range: string) {
+          return setExtensionReviewRangeRef.current(range);
+        },
+        async loadHistory(): Promise<ExtensionReviewHistoryResult> {
+          if (bootstrap.input.kind !== "vcs") {
+            return {
+              ok: false,
+              reason: "unavailable",
+              detail: "Review history is available only for VCS diff sessions.",
+            };
+          }
+
+          const adapter = getConfiguredVcsAdapter(
+            bootstrap.input.options.vcs,
+            bootstrap.reloadContext.vcsAdapters,
+          );
+          if (!adapter.loadHistory) {
+            return {
+              ok: false,
+              reason: "unavailable",
+              detail: `${adapter.name} does not provide review history.`,
+            };
+          }
+
+          try {
+            const history = await adapter.loadHistory({
+              cwd: bootstrap.reloadContext.repoRoot ?? bootstrap.reloadContext.cwd,
+            });
+            return { ok: true, history };
+          } catch (error) {
+            return {
+              ok: false,
+              reason: "failed",
+              detail: `Failed to load ${adapter.name} history • ${
+                error instanceof Error ? error.message || error.name : String(error)
+              }`,
+            };
+          }
+        },
+      }),
+    [bootstrap.input, bootstrap.reloadContext],
+  );
+
   // Lifecycle and bus listeners receive the same sidebar controls as commands,
   // so an extension can react to loaded content by revealing its own pane.
   if (extensions) {
@@ -751,6 +840,7 @@ export function App({
         cwd: extensions?.context.cwd ?? process.cwd(),
         notify: (message, type) => extensions?.context.notify(message, type),
         sidebars: createSidebarControls(registered.extensionId),
+        review: createReviewControls(),
         fileViews: createFileViewControls(registered.extensionId),
         // Snapshot semantics: built when the key fires, so the handler sees
         // where the review was at that moment, even if it awaits and the user
@@ -796,6 +886,7 @@ export function App({
     [
       createExtensionDialogs,
       createFileViewControls,
+      createReviewControls,
       createSidebarControls,
       createWorkspaceControls,
       extensions,
@@ -1013,6 +1104,7 @@ export function App({
     selectedHunk: review.selectedHunk,
     selectedHunkIndex,
     showAgentNotes,
+    sessionBinding,
   });
   const maxVisibleLineNumber = useMemo(
     () =>
@@ -1321,6 +1413,71 @@ export function App({
       console.error("Failed to reload the current diff.", error);
     });
   }, [refreshCurrentInput]);
+
+  /** Replace one extension-requested VCS range while preserving the active Hunk view. */
+  const setExtensionReviewRange = useCallback(
+    async (requestedRange: string): Promise<ExtensionReviewRangeResult> => {
+      const range = normalizeExtensionReviewRange(requestedRange);
+      if (!appAliveForNavigationRef.current) {
+        return {
+          ok: false,
+          reason: "unavailable",
+          detail: "The review session was reloaded before the range could be changed.",
+        };
+      }
+
+      const state = resolveExtensionReviewRangeState(bootstrap.input);
+      if (!state.available || bootstrap.input.kind !== "vcs") {
+        return {
+          ok: false,
+          reason: "unavailable",
+          detail: state.available
+            ? "Review ranges are available only for VCS diff sessions."
+            : state.detail,
+        };
+      }
+
+      const nextInput = withCurrentViewOptions(withExtensionReviewRange(bootstrap.input, range), {
+        layoutMode,
+        themeId,
+        showAgentNotes,
+        showHunkHeaders,
+        showLineNumbers,
+        showMenuBar,
+        wrapLines,
+      });
+
+      try {
+        await onReloadSession(nextInput, {
+          reason: "manual",
+          resetApp: false,
+          sourcePath: bootstrap.changeset.sourceLabel,
+        });
+        return { ok: true };
+      } catch (error) {
+        return {
+          ok: false,
+          reason: "failed",
+          detail: `Failed to load review range ${range} • ${
+            error instanceof Error ? error.message || error.name : String(error)
+          }`,
+        };
+      }
+    },
+    [
+      bootstrap.changeset.sourceLabel,
+      bootstrap.input,
+      layoutMode,
+      onReloadSession,
+      showAgentNotes,
+      showHunkHeaders,
+      showLineNumbers,
+      showMenuBar,
+      themeId,
+      wrapLines,
+    ],
+  );
+  setExtensionReviewRangeRef.current = setExtensionReviewRange;
 
   // A completed extension write is a source change the user did not make in an
   // editor, so it reloads through exactly the path the refresh key takes.
@@ -1750,6 +1907,7 @@ export function App({
   } = useMenuController(menus);
 
   useAppKeyboardShortcuts({
+    enabled: active,
     activeMenuId,
     activateCurrentMenuItem,
     closeAgentSkill,
@@ -1774,6 +1932,7 @@ export function App({
     moveMenuItem,
     moveThemeSelector,
     openMenu,
+    openNewReviewTab: onOpenNewReviewTab,
     saveConfigPromptOpen,
     saveViewPreferencesAndQuit,
     discardViewPreferencesAndQuit,
@@ -1854,7 +2013,12 @@ export function App({
   // plus its divider. Keep this in lockstep with the body container's
   // paddingLeft and the sidebar render branch below.
   const diffPaneScreenLeft = bodyPadding / 2 + sidebarLayout.leftWidth;
-  const diffPaneScreenTop = showMenuBar ? 1 : 0;
+  // Pager mode hides all app chrome until its menu is explicitly revealed.
+  const visibleReviewTabs = showMenuBar ? reviewTabs : null;
+  const diffPaneScreenTop = (showMenuBar ? 1 : 0) + (visibleReviewTabs ? 1 : 0);
+  // The tab strip occupies the pane separator's old row. Keeping both would
+  // spend two extra rows and shift every review/mouse coordinate unnecessarily.
+  const showPaneTopChrome = showMenuBar && !visibleReviewTabs;
 
   /** Render one open sidebar view at its planned width. */
   const renderSidebarPane = (pane: SidebarPanePlan) => {
@@ -1863,15 +2027,17 @@ export function App({
     const paneSelection = getExtensionSelection();
     return (
       <ExtensionSidebarPane
+        active={active}
         registered={pane.view.registered}
         files={filteredFiles}
         fileViews={getExtensionFileViews()}
         selectedFileId={paneSelection.file?.id ?? null}
         selectedHunkIndex={paneSelection.hunkIndex}
-        showTopChrome={showMenuBar}
+        showTopChrome={showPaneTopChrome}
         theme={activeTheme}
         width={pane.width}
         keybindings={sidebarKeybindings}
+        review={createReviewControls()}
         notify={(message, type) => extensions?.context.notify(message, type)}
         onSelectFile={(fileId) => {
           focusFiles();
@@ -1916,6 +2082,7 @@ export function App({
           onToggleMenu={toggleMenu}
         />
       ) : null}
+      {visibleReviewTabs}
 
       <box
         style={{
@@ -1979,7 +2146,7 @@ export function App({
           pagerMode={pagerMode}
           screenLeft={diffPaneScreenLeft}
           screenTop={diffPaneScreenTop}
-          showTopChrome={showMenuBar}
+          showTopChrome={showPaneTopChrome}
           headerLabelWidth={diffHeaderLabelWidth}
           headerStatsWidth={diffHeaderStatsWidth}
           layout={resolvedLayout}

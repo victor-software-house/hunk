@@ -88,7 +88,7 @@ describe("PTY navigation", () => {
     const session = await harness.launchHunk({
       args: ["diff", "--mode", "split"],
       cwd: fixture.dir,
-      cols: 120,
+      cols: 220,
       rows: 16,
     });
 
@@ -97,23 +97,17 @@ describe("PTY navigation", () => {
         timeout: 15_000,
       });
 
-      let reachedShortFileMidHunk = false;
-      for (let index = 0; index < 24; index += 1) {
+      // The fixture has 18 long-file hunks followed by two short-file hunks.
+      // Navigate by that semantic count: the larger tabbed viewport can render
+      // the second short hunk while the first is still selected.
+      for (let index = 0; index < 19; index += 1) {
         await session.press("]");
-        const snapshot = await session.text({ immediate: true });
-        if (snapshot.includes("export const mid = 4;")) {
-          reachedShortFileMidHunk = true;
-          break;
-        }
       }
-
-      if (!reachedShortFileMidHunk) {
-        await harness.waitForSnapshot(
-          session,
-          (text) => text.includes("export const mid = 4;"),
-          5_000,
-        );
-      }
+      await harness.waitForSnapshot(
+        session,
+        (text) => text.includes("export const mid = 4;"),
+        5_000,
+      );
 
       await session.press("[");
       await session.waitIdle({ timeout: 80 });
@@ -166,6 +160,33 @@ describe("PTY navigation", () => {
 
       expect(firstHunk).toContain("line1 = 100");
       expect(firstHunk).not.toContain("line60 = 6000");
+    } finally {
+      session.close();
+    }
+  });
+
+  test("R opens the bundled history range flow without replacing the review stream", async () => {
+    const fixture = harness.createSidebarJumpRepoFixture();
+    const session = await harness.launchHunk({
+      args: ["diff", "--mode", "split"],
+      cwd: fixture.dir,
+      cols: 220,
+      rows: 16,
+    });
+
+    try {
+      const initial = await session.waitForText(/Files\s+History/, { timeout: 15_000 });
+      expect(initial).toContain("alpha.ts");
+
+      await session.type("R");
+      const history = await session.waitForText(/[0-9a-f]{7} initial/, { timeout: 5_000 });
+      expect(history).toContain("History");
+      expect(history).toContain("Choose base, then head");
+      expect(history).toContain("alpha.ts");
+
+      await session.press("escape");
+      const files = await session.waitForText(/alpha\.ts/, { timeout: 5_000 });
+      expect(files).not.toContain("Choose base, then head");
     } finally {
       session.close();
     }

@@ -18,8 +18,8 @@ src/session/agent/   agent-facing session CLI, command manifest, errors, and for
 src/session/app/     mounted-review registration, bridge, and reload authorization
 src/session/broker/  local daemon transport, launcher, Hunk broker state, wire parsing, projections
 src/ui/              interactive review application, rendering, interaction, and chrome
-src/extension-api/   public `hunkdiff/extension` declaration and runtime boundary
-src/opentui/         public `hunkdiff/opentui` component boundary
+src/extension-api/   public `@victor-software-house/hunk/extension` declaration and runtime boundary
+src/opentui/         public `@victor-software-house/hunk/opentui` component boundary
 src/lib/             small product-wide utilities with no feature ownership
 ```
 

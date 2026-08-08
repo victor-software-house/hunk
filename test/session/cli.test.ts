@@ -1,8 +1,10 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cleanupTestConfigHomes, createTestConfigHome } from "../helpers/config-home";
+import { createScriptedTerminalTestCommand } from "../helpers/terminal-session";
 
 const repoRoot = process.cwd();
 const sourceEntrypoint = join(repoRoot, "src/main.tsx");
@@ -21,10 +23,28 @@ const ttyToolsAvailable =
 interface SessionListJson {
   sessions: Array<{
     sessionId: string;
-    files: Array<{
-      path: string;
+    tabs: Array<{
+      inputKind: string;
+      files: Array<{ path: string }>;
     }>;
   }>;
+}
+
+function sessionHasFile(session: SessionListJson["sessions"][number], path: string) {
+  return session.tabs.some((tab) => tab.files.some((file) => file.path === path));
+}
+
+async function reserveLoopbackPort() {
+  const listener = createServer();
+  await new Promise<void>((resolve, reject) => {
+    listener.once("error", reject);
+    listener.listen(0, "127.0.0.1", () => resolve());
+  });
+  const address = listener.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+  await new Promise<void>((resolve) => listener.close(() => resolve()));
+  if (!port) throw new Error("Failed to reserve a loopback port for the session CLI test.");
+  return port;
 }
 
 function cleanupTempDirs() {
@@ -34,10 +54,6 @@ function cleanupTempDirs() {
       rmSync(dir, { recursive: true, force: true });
     }
   }
-}
-
-function shellQuote(value: string) {
-  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 function waitUntil<T>(
@@ -93,12 +109,12 @@ function spawnHunkSession(
     timeoutSeconds?: number;
   },
 ) {
-  const innerCommand = `bun run ${shellQuote(sourceEntrypoint)} diff ${shellQuote(fixture.before)} ${shellQuote(fixture.after)}`;
-  const hunkCommand = [
-    `(sleep ${quitAfterSeconds}; printf q) | timeout ${timeoutSeconds} script -q -f -e -c`,
-    shellQuote(innerCommand),
-    shellQuote(fixture.transcript),
-  ].join(" ");
+  const hunkCommand = createScriptedTerminalTestCommand({
+    argv: ["bun", "run", sourceEntrypoint, "diff", fixture.before, fixture.after],
+    transcript: fixture.transcript,
+    quitAfterSeconds,
+    timeoutSeconds,
+  });
 
   return Bun.spawn(["bash", "-lc", hunkCommand], {
     cwd: fixture.dir,
@@ -108,6 +124,9 @@ function spawnHunkSession(
     env: {
       ...process.env,
       XDG_CONFIG_HOME: testConfigHome,
+      TERM: "xterm-256color",
+      COLUMNS: "120",
+      LINES: "24",
       HUNK_MCP_PORT: `${port}`,
     },
   });
@@ -122,6 +141,9 @@ function runSessionCli(args: string[], port: number, stdinText?: string) {
     env: {
       ...process.env,
       XDG_CONFIG_HOME: testConfigHome,
+      TERM: "xterm-256color",
+      COLUMNS: "120",
+      LINES: "24",
       HUNK_MCP_PORT: `${port}`,
     },
   });
@@ -129,6 +151,14 @@ function runSessionCli(args: string[], port: number, stdinText?: string) {
   const stdout = Buffer.from(proc.stdout).toString("utf8");
   const stderr = Buffer.from(proc.stderr).toString("utf8");
   return { proc, stdout, stderr };
+}
+
+/** Wait until the mounted app bridge can accept mutations, not only until registration exists. */
+async function waitForSessionBridge(sessionId: string, port: number) {
+  await waitUntil("mounted session bridge", () => {
+    const context = runSessionCli(["context", sessionId, "--json"], port);
+    return context.proc.exitCode === 0 ? context : null;
+  });
 }
 
 afterEach(() => {
@@ -141,7 +171,7 @@ describe("session CLI integration", () => {
       return;
     }
 
-    const port = 48961;
+    const port = await reserveLoopbackPort();
     const fixture = createFixtureFiles(
       "inspect",
       ["export const value = 1;", "console.log(value);"],
@@ -160,16 +190,19 @@ describe("session CLI integration", () => {
         return parsed.sessions.length > 0 ? parsed.sessions : null;
       });
 
-      const sessionId = listed[0]!.sessionId;
+      const sessionId =
+        listed.find((session) => sessionHasFile(session, fixture.afterName))?.sessionId ??
+        listed[0]!.sessionId;
+      await waitForSessionBridge(sessionId, port);
       const get = runSessionCli(["get", sessionId, "--json"], port);
       expect(get.proc.exitCode).toBe(0);
       expect(get.stderr).toBe("");
       expect(JSON.parse(get.stdout)).toMatchObject({
         session: {
           sessionId,
-          files: [
+          tabs: [
             {
-              path: fixture.afterName,
+              files: [{ path: fixture.afterName }],
             },
           ],
         },
@@ -181,11 +214,9 @@ describe("session CLI integration", () => {
       expect(JSON.parse(context.stdout)).toMatchObject({
         context: {
           sessionId,
-          selectedFile: {
-            path: fixture.afterName,
-          },
-          selectedHunk: {
-            index: 0,
+          tab: {
+            selectedFile: { path: fixture.afterName },
+            selectedHunk: { index: 0 },
           },
         },
       });
@@ -200,7 +231,7 @@ describe("session CLI integration", () => {
       return;
     }
 
-    const port = 48963;
+    const port = await reserveLoopbackPort();
     const fixtureA = createFixtureFiles(
       "reload-alpha",
       ["export const alpha = 1;"],
@@ -220,7 +251,10 @@ describe("session CLI integration", () => {
         return parsed.sessions.length > 0 ? parsed.sessions : null;
       });
 
-      const sessionId = listed[0]!.sessionId;
+      const sessionId =
+        listed.find((session) => sessionHasFile(session, fixtureA.afterName))?.sessionId ??
+        listed[0]!.sessionId;
+      await waitForSessionBridge(sessionId, port);
       writeFileSync(fixtureA.before, "export const before = 10;\n");
       writeFileSync(fixtureA.after, "export const after = 20;\nexport const extra = 'yes';\n");
 
@@ -247,18 +281,14 @@ describe("session CLI integration", () => {
         }
 
         const parsed = JSON.parse(get.stdout) as {
-          session?: {
-            inputKind?: string;
-            files?: Array<{ path: string }>;
-          };
+          session?: { tabs?: Array<{ inputKind?: string; files?: Array<{ path: string }> }> };
         };
-        return parsed.session?.files?.[0]?.path === fixtureA.afterName ? parsed : null;
+        return parsed.session?.tabs?.[0]?.files?.[0]?.path === fixtureA.afterName ? parsed : null;
       });
 
       expect(reloaded).toMatchObject({
         session: {
-          inputKind: "diff",
-          files: [{ path: fixtureA.afterName }],
+          tabs: [{ inputKind: "diff", files: [{ path: fixtureA.afterName }] }],
         },
       });
     } finally {
@@ -272,7 +302,7 @@ describe("session CLI integration", () => {
       return;
     }
 
-    const port = 48966;
+    const port = await reserveLoopbackPort();
     const fixture = createFixtureFiles(
       "reload-denied",
       ["export const visible = 1;"],
@@ -297,7 +327,10 @@ describe("session CLI integration", () => {
         return parsed.sessions.length > 0 ? parsed.sessions : null;
       });
 
-      const sessionId = listed[0]!.sessionId;
+      const sessionId =
+        listed.find((session) => sessionHasFile(session, fixture.afterName))?.sessionId ??
+        listed[0]!.sessionId;
+      await waitForSessionBridge(sessionId, port);
       const reload = runSessionCli(
         [
           "reload",
@@ -319,7 +352,7 @@ describe("session CLI integration", () => {
       expect(get.proc.exitCode).toBe(0);
       expect(JSON.parse(get.stdout)).toMatchObject({
         session: {
-          files: [{ path: fixture.afterName }],
+          tabs: [{ files: [{ path: fixture.afterName }] }],
         },
       });
     } finally {
@@ -333,7 +366,7 @@ describe("session CLI integration", () => {
       return;
     }
 
-    const port = 48962;
+    const port = await reserveLoopbackPort();
     const fixture = createFixtureFiles(
       "mutate",
       [
@@ -380,14 +413,17 @@ describe("session CLI integration", () => {
         return parsed.sessions.length > 0 ? parsed.sessions : null;
       });
 
-      const sessionId = listed[0]!.sessionId;
+      const sessionId =
+        listed.find((session) => sessionHasFile(session, fixture.afterName))?.sessionId ??
+        listed[0]!.sessionId;
+      await waitForSessionBridge(sessionId, port);
 
       const navigate = runSessionCli(
         ["navigate", sessionId, "--file", fixture.afterName, "--hunk", "2", "--json"],
         port,
       );
-      expect(navigate.proc.exitCode).toBe(0);
       expect(navigate.stderr).toBe("");
+      expect(navigate.proc.exitCode).toBe(0);
       expect(JSON.parse(navigate.stdout)).toMatchObject({
         result: {
           filePath: fixture.afterName,
@@ -402,9 +438,9 @@ describe("session CLI integration", () => {
         }
 
         const parsed = JSON.parse(context.stdout) as {
-          context?: { selectedHunk?: { index: number } };
+          context?: { tab?: { selectedHunk?: { index: number } } };
         };
-        return parsed.context?.selectedHunk?.index === 1 ? parsed : null;
+        return parsed.context?.tab?.selectedHunk?.index === 1 ? parsed : null;
       });
 
       const resetSelection = runSessionCli(
@@ -421,9 +457,10 @@ describe("session CLI integration", () => {
         }
 
         const parsed = JSON.parse(context.stdout) as {
-          context?: { selectedHunk?: { index: number }; showAgentNotes?: boolean };
+          context?: { tab?: { selectedHunk?: { index: number }; showAgentNotes?: boolean } };
         };
-        return parsed.context?.selectedHunk?.index === 0 && parsed.context?.showAgentNotes === false
+        return parsed.context?.tab?.selectedHunk?.index === 0 &&
+          parsed.context?.tab?.showAgentNotes === false
           ? parsed
           : null;
       });
@@ -486,10 +523,10 @@ describe("session CLI integration", () => {
       expect(unchangedContext.proc.exitCode).toBe(0);
       expect(JSON.parse(unchangedContext.stdout)).toMatchObject({
         context: {
-          selectedHunk: {
-            index: 0,
+          tab: {
+            selectedHunk: { index: 0 },
+            showAgentNotes: false,
           },
-          showAgentNotes: false,
         },
       });
 
@@ -527,9 +564,10 @@ describe("session CLI integration", () => {
         }
 
         const parsed = JSON.parse(context.stdout) as {
-          context?: { selectedHunk?: { index: number }; showAgentNotes?: boolean };
+          context?: { tab?: { selectedHunk?: { index: number }; showAgentNotes?: boolean } };
         };
-        return parsed.context?.selectedHunk?.index === 1 && parsed.context?.showAgentNotes === true
+        return parsed.context?.tab?.selectedHunk?.index === 1 &&
+          parsed.context?.tab?.showAgentNotes === true
           ? parsed
           : null;
       });
@@ -544,7 +582,7 @@ describe("session CLI integration", () => {
       return;
     }
 
-    const port = 48964;
+    const port = await reserveLoopbackPort();
     const fixture = createFixtureFiles(
       "apply-batch",
       [
@@ -591,7 +629,10 @@ describe("session CLI integration", () => {
         return parsed.sessions.length > 0 ? parsed.sessions : null;
       });
 
-      const sessionId = listed[0]!.sessionId;
+      const sessionId =
+        listed.find((session) => sessionHasFile(session, fixture.afterName))?.sessionId ??
+        listed[0]!.sessionId;
+      await waitForSessionBridge(sessionId, port);
       const apply = runSessionCli(
         ["comment", "apply", sessionId, "--stdin", "--json"],
         port,
@@ -639,8 +680,8 @@ describe("session CLI integration", () => {
       expect(context.proc.exitCode).toBe(0);
       expect(JSON.parse(context.stdout)).toMatchObject({
         context: {
-          selectedHunk: {
-            index: 0,
+          tab: {
+            selectedHunk: { index: 0 },
           },
         },
       });
@@ -661,7 +702,7 @@ describe("session CLI integration", () => {
       return;
     }
 
-    const port = 48965;
+    const port = await reserveLoopbackPort();
     const fixture = createFixtureFiles(
       "apply-batch-focus",
       [
@@ -708,7 +749,10 @@ describe("session CLI integration", () => {
         return parsed.sessions.length > 0 ? parsed.sessions : null;
       });
 
-      const sessionId = listed[0]!.sessionId;
+      const sessionId =
+        listed.find((session) => sessionHasFile(session, fixture.afterName))?.sessionId ??
+        listed[0]!.sessionId;
+      await waitForSessionBridge(sessionId, port);
       const apply = runSessionCli(
         ["comment", "apply", sessionId, "--stdin", "--focus", "--json"],
         port,
@@ -728,8 +772,8 @@ describe("session CLI integration", () => {
         }),
       );
 
-      expect(apply.proc.exitCode).toBe(0);
       expect(apply.stderr).toBe("");
+      expect(apply.proc.exitCode).toBe(0);
       expect(JSON.parse(apply.stdout)).toMatchObject({
         result: {
           applied: [
@@ -746,9 +790,10 @@ describe("session CLI integration", () => {
         }
 
         const parsed = JSON.parse(context.stdout) as {
-          context?: { selectedHunk?: { index: number }; showAgentNotes?: boolean };
+          context?: { tab?: { selectedHunk?: { index: number }; showAgentNotes?: boolean } };
         };
-        return parsed.context?.selectedHunk?.index === 1 && parsed.context?.showAgentNotes === true
+        return parsed.context?.tab?.selectedHunk?.index === 1 &&
+          parsed.context?.tab?.showAgentNotes === true
           ? parsed
           : null;
       });

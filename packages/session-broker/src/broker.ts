@@ -119,6 +119,15 @@ export class SessionBroker<
     this.state = new SessionBrokerState({
       parseRegistration: options.parseRegistration,
       parseSnapshot: options.parseSnapshot,
+      matchesSession: (session, selector) =>
+        selector.sessionId
+          ? session.sessionId === selector.sessionId
+          : selector.sessionPath
+            ? session.cwd === selector.sessionPath
+            : selector.repoRoot
+              ? session.repoRoot === selector.repoRoot
+              : true,
+      describeSession: (session) => `${session.sessionId} (${session.title})`,
       buildListedSession: (entry) => this.buildRecord(entry),
       buildSelectedContext: (session) => session,
       buildSessionReview: (entry) => this.buildRecord(entry),

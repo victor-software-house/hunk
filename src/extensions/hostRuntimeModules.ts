@@ -1,4 +1,5 @@
 import { dirname } from "node:path";
+import { resolveCanonicalPath } from "../core/paths";
 
 /**
  * Host-owned modules served to dynamically imported extension files.
@@ -50,6 +51,8 @@ const HOST_MODULE_LOADERS: Record<string, () => Promise<object>> = {
   "@opentui/react/jsx-runtime": () => import("@opentui/react/jsx-runtime"),
   "@opentui/react/jsx-dev-runtime": () => import("@opentui/react/jsx-dev-runtime"),
   "@opentui/core": () => import("@opentui/core"),
+  "@victor-software-house/hunk/extension": () => import("../extension-api"),
+  // Existing upstream-authored extensions keep loading inside the fork.
   "hunkdiff/extension": () => import("../extension-api"),
 };
 
@@ -198,6 +201,14 @@ export function registerHostRuntimeModules(entryPaths: readonly string[]) {
 
   registerVirtualModules();
   for (const path of entryPaths) {
-    registerSourceRoot(dirname(path));
+    const sourceRoot = dirname(path);
+    registerSourceRoot(sourceRoot);
+    // Bun may report either the imported spelling or its canonical path to
+    // `onLoad`; register both so symlink and macOS `/var` aliases cannot bypass
+    // the host-React rewrite.
+    const canonicalRoot = dirname(resolveCanonicalPath(path));
+    if (canonicalRoot !== sourceRoot) {
+      registerSourceRoot(canonicalRoot);
+    }
   }
 }
