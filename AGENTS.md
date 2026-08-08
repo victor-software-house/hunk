@@ -1,5 +1,16 @@
 # hunk agent notes
 
+Read [`FORK.md`](FORK.md) and generated [`PATCHES.md`](PATCHES.md) before changing this downstream fork.
+
+## fork workflow
+
+- `origin` is the VSH publication authority; `upstream` is fetch-only and its push URL stays `DISABLED`.
+- Forkctl and StGit own every downstream change. Do not create ordinary commits above the upstream base, manually edit generated evidence, run plain Git rebase, or force-push `main`.
+- Start with `mise run fork status` and `mise run fork check`.
+- Create or select one explicit patch before editing; stage owned paths, run `mise run fork check -s`, then `mise run fork patch refresh` and `mise run fork patch finish`.
+- Upstream updates use `mise run fork rebase --onto refs/heads/main`; inspect its range-diff and operation evidence before the separately approved `mise run fork publish` step.
+- `vsh-distribution` owns VSH package/release policy. `fork-tooling` owns `FORK.md`, the manifest, generated ledger/exports, mounted task, and hook integration.
+
 ## purpose
 
 - Terminal-first diff viewer for understanding coding-agent changesets.
