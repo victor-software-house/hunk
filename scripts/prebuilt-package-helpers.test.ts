@@ -158,8 +158,7 @@ describe("prebuilt package helpers", () => {
         npmTag: "beta",
       }),
     ).toEqual([
-      "--config",
-      "/repo/bunfig.toml",
+      "--config=/repo/bunfig.toml",
       "publish",
       "--tolerate-republish",
       "--access",
