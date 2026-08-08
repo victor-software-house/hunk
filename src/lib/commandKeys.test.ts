@@ -4,7 +4,7 @@ import { matchesKeyChord, parseKeyChord, synthesizeKeyEvent, toKeyChordList } fr
 /**
  * The internal-only pieces of chord handling.
  *
- * The grammar itself is published as `hunkdiff/extension` and covered by
+ * The grammar itself is published as `@victor-software-house/hunk/extension` and covered by
  * `src/extension-api/keys.test.ts`; what lives here is what only Hunk needs.
  */
 
