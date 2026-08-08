@@ -10,13 +10,14 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   binaryFilenameForSpec,
   getHostPlatformPackageSpec,
   releaseNpmDir,
 } from "./prebuilt-package-helpers";
-import { envWithPath, npmCommand } from "./script-helpers";
+import { envWithPath } from "./script-helpers";
 
 function run(command: string[], options?: { cwd?: string; env?: NodeJS.ProcessEnv }) {
   const proc = Bun.spawnSync(command, {
@@ -68,7 +69,7 @@ const packageVersion = JSON.parse(await Bun.file(path.join(repoRoot, "package.js
   .version as string;
 const releaseRoot = releaseNpmDir(repoRoot);
 const hostSpec = getHostPlatformPackageSpec();
-const tempRoot = path.join(repoRoot, "tmp");
+const tempRoot = path.join(tmpdir(), "hunk-prebuilt-smoke");
 mkdirSync(tempRoot, { recursive: true });
 let packageDir: string | undefined;
 let installDir: string | undefined;
@@ -85,16 +86,19 @@ try {
   // but the Windows `hunk.cmd` shim does not need bash on PATH.
   const bashDir = process.platform === "win32" ? undefined : commandDirectory("bash");
 
-  run([npmCommand, "pack", "--pack-destination", packageDir], {
-    cwd: path.join(releaseRoot, hostSpec.packageName),
+  const platformPack = run(["bun", "pm", "pack", "--destination", packageDir, "--quiet"], {
+    cwd: path.join(releaseRoot, hostSpec.artifactName),
   });
 
-  const platformTarball = path.join(packageDir, `${hostSpec.packageName}-${packageVersion}.tgz`);
+  const platformFilename = platformPack.stdout.trim().split(/\r?\n/).at(-1)!;
+  const platformTarball = path.isAbsolute(platformFilename)
+    ? platformFilename
+    : path.join(packageDir, platformFilename);
 
   // Point a temp copy of the staged meta package at the local platform tarball.
   // The real manifest uses semver ranges, but this smoke test runs before publish.
-  const smokePackageDir = path.join(smokeMetaDir, "hunkdiff");
-  cpSync(path.join(releaseRoot, "hunkdiff"), smokePackageDir, { recursive: true });
+  const smokePackageDir = path.join(smokeMetaDir, "hunk");
+  cpSync(path.join(releaseRoot, "hunk"), smokePackageDir, { recursive: true });
   const smokeManifestPath = path.join(smokePackageDir, "package.json");
   const smokeManifest = JSON.parse(readFileSync(smokeManifestPath, "utf8")) as {
     optionalDependencies?: Record<string, string>;
@@ -105,30 +109,57 @@ try {
   };
   writeFileSync(smokeManifestPath, `${JSON.stringify(smokeManifest, null, 2)}\n`);
 
-  run([npmCommand, "pack", "--pack-destination", packageDir], {
+  const metaPack = run(["bun", "pm", "pack", "--destination", packageDir, "--quiet"], {
     cwd: smokePackageDir,
   });
-  const metaTarball = path.join(packageDir, `hunkdiff-${packageVersion}.tgz`);
+  const metaFilename = metaPack.stdout.trim().split(/\r?\n/).at(-1)!;
+  const metaTarball = path.isAbsolute(metaFilename)
+    ? metaFilename
+    : path.join(packageDir, metaFilename);
 
-  run([npmCommand, "install", "-g", "--prefix", installDir, metaTarball]);
+  const bunInstallEnv = {
+    ...process.env,
+    BUN_INSTALL: installDir,
+    BUN_INSTALL_CACHE_DIR: path.join(installDir, "cache"),
+  };
+  run(["bun", "add", "--global", "--exact", "--force", metaTarball], {
+    cwd: smokeMetaDir,
+    env: bunInstallEnv,
+  });
 
-  const installedBinDir = process.platform === "win32" ? installDir : path.join(installDir, "bin");
-  const installedPackageRoot =
-    process.platform === "win32"
-      ? path.join(installDir, "node_modules", "hunkdiff")
-      : path.join(installDir, "lib", "node_modules", "hunkdiff");
+  const installedBinDir = path.join(installDir, "bin");
+  const installedPackageRoot = path.join(
+    installDir,
+    "install",
+    "global",
+    "node_modules",
+    "@victor-software-house",
+    "hunk",
+  );
   const sanitizedPath = [installedBinDir, nodeDir, bashDir].filter(Boolean).join(path.delimiter);
   const installedHunk = path.join(
     installedBinDir,
     process.platform === "win32" ? "hunk.cmd" : "hunk",
   );
-  const installedPlatformBinary = path.join(
-    installedPackageRoot,
-    "node_modules",
-    hostSpec.packageName,
-    "bin",
-    binaryFilenameForSpec(hostSpec),
+  const globalNodeModules = path.join(installDir, "install", "global", "node_modules");
+  const installedPlatformBinaryCandidates = [
+    path.join(
+      installedPackageRoot,
+      "node_modules",
+      hostSpec.packageName,
+      "bin",
+      binaryFilenameForSpec(hostSpec),
+    ),
+    path.join(globalNodeModules, hostSpec.packageName, "bin", binaryFilenameForSpec(hostSpec)),
+  ];
+  const installedPlatformBinary = installedPlatformBinaryCandidates.find((candidate) =>
+    existsSync(candidate),
   );
+  if (!installedPlatformBinary) {
+    throw new Error(
+      `Expected installed platform binary at ${installedPlatformBinaryCandidates.join(" or ")}.`,
+    );
+  }
   const commandEnv = envWithPath(sanitizedPath);
 
   if (process.platform !== "win32") {
@@ -184,7 +215,7 @@ try {
     throw new Error("bun unexpectedly available on the prebuilt install smoke-test PATH");
   }
 
-  console.log(`Verified prebuilt npm install smoke test with ${hostSpec.packageName}`);
+  console.log(`Verified prebuilt Bun install smoke test with ${hostSpec.packageName}`);
 } finally {
   if (packageDir) {
     rmSync(packageDir, { recursive: true, force: true });

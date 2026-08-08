@@ -39,7 +39,7 @@ import type {
   ExtensionVcsOperation as __HunkOperation,
   ExtensionVcsPatchResult as __HunkPatchResult,
   HunkExtensionAPI as __HunkApi,
-} from "hunkdiff/extension";
+} from "@victor-software-house/hunk/extension";
 
 declare const hunk: __HunkApi;
 declare function runHgDiff(cwd: string): Promise<string>;

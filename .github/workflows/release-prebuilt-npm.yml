@@ -27,9 +27,6 @@ on:
     tags:
       - "v*"
 
-env:
-  SKIP_INSTALL_SIMPLE_GIT_HOOKS: "1"
-
 concurrency:
   group: release-prebuilt-${{ github.ref }}
   cancel-in-progress: false
@@ -37,6 +34,7 @@ concurrency:
 jobs:
   release-benchmark-gate:
     name: Release benchmark gate
+    if: github.repository == 'modem-dev/hunk'
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository

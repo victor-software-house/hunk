@@ -27,7 +27,7 @@ CLI input
 - Pager mode has two paths: full diff UI for patch-like stdin, plain-text fallback for non-diff pager content.
 - View defaults are layered through built-ins, user config, repo `.hunk/config.toml`, command sections, pager sections, and CLI flags.
 - `hunk daemon serve` runs one loopback daemon that brokers agent commands to many live Hunk sessions. Normal Hunk sessions should auto-start and register with that daemon when session brokering is enabled. Keep it local-only and session-brokered rather than opening per-TUI ports.
-- Extensions come in two tiers — user TypeScript extensions and the bundled tier in `src/extensions/default/` — running through one per-extension API object and registry (`src/extensions/runExtension.ts`, resolved via `src/extensions/apply.ts`). Every shipped VCS backend and the built-in sidebar are bundled extensions registering through the public API; that dogfooding keeps `hunkdiff/extension` honest. Hard rules: `src/extension-api/types.ts` stays import-free (declaration emission publishes whatever it reaches; `scripts/check-pack.ts` gates it); `src/extensions/default/vcs/` loads from VCS adapter resolution and must stay renderer-free (the sidebar loads separately via `getBundledSidebarView`); repo-local `.hunk/extensions/` never executes without the trust prompt; bundled extensions stay loaded under `--no-extensions`. The full architecture — host-served runtime modules, sidebar pane model, command dispatch, VCS detection ordering, conversion boundaries — is mapped in `docs/extension-architecture.md` and documented in depth by the module headers it names; the authoring guide is `docs/extensions.md`.
+- Extensions come in two tiers — user TypeScript extensions and the bundled tier in `src/extensions/default/` — running through one per-extension API object and registry (`src/extensions/runExtension.ts`, resolved via `src/extensions/apply.ts`). Every shipped VCS backend and the built-in sidebar are bundled extensions registering through the public API; that dogfooding keeps `@victor-software-house/hunk/extension` honest. Hard rules: `src/extension-api/types.ts` stays import-free (declaration emission publishes whatever it reaches; `scripts/check-pack.ts` gates it); `src/extensions/default/vcs/` loads from VCS adapter resolution and must stay renderer-free (the sidebar loads separately via `getBundledSidebarView`); repo-local `.hunk/extensions/` never executes without the trust prompt; bundled extensions stay loaded under `--no-extensions`. The full architecture — host-served runtime modules, sidebar pane model, command dispatch, VCS detection ordering, conversion boundaries — is mapped in `docs/extension-architecture.md` and documented in depth by the module headers it names; the authoring guide is `docs/extensions.md`.
 - Agent rationale is optional sidecar JSON matched onto files/hunks.
 - The order of `files` in the sidecar is intentional. Hunk uses that order for the sidebar and main review stream.
 - Prefer one source of truth for each user-visible behavior. When rendering, navigation, scrolling, or note placement share the same model, derive them from the same planning layer rather than maintaining parallel implementations.
@@ -102,18 +102,19 @@ CLI input
 
 ## commands
 
-- install deps: `bun install`
-- run from source: `bun run src/main.tsx -- diff`
-- review a commit from source: `bun run src/main.tsx -- show HEAD~1`
-- fast smoke test: `bun run src/main.tsx -- diff /tmp/before.ts /tmp/after.ts`
-- typecheck: `bun run typecheck`
-- tests: `bun test`
-- PTY integration tests: `bun run test:integration`
-- TTY smoke test: `bun run test:tty-smoke`
-- format: `bun run format`
-- lint: `bun run lint`
-- build binary: `bun run build:bin`
-- install binary: `bun run install:bin`
+- install tools: `mise install --locked`
+- install deps: `mise deps`
+- install hooks: `mise run hooks:install`
+- run from source: `mise x -- bun run src/main.tsx -- diff`
+- review a commit from source: `mise x -- bun run src/main.tsx -- show HEAD~1`
+- fast smoke test: `mise x -- bun run src/main.tsx -- diff /tmp/before.ts /tmp/after.ts`
+- merge gate: `mise run verify`
+- terminal gate: `mise run verify:terminal`
+- format: `mise run format`
+- lint: `mise run lint`
+- typecheck: `mise run typecheck`
+- build binary: `mise run build:bin`
+- install binary: `mise x -- bun run install:bin`
 
 ## binary notes
 
@@ -137,24 +138,15 @@ CLI input
 ## releases
 
 - Use Changesets for user-visible release notes. Add a `.changeset/*.md` entry with `bun run changeset` instead of editing `CHANGELOG.md` directly.
-- Target the public `hunkdiff` package in changesets. Use `patch` for fixes and small behavior changes, `minor` for new user-facing features, and `major` for breaking changes.
+- Target `@victor-software-house/hunk` in changesets. Use `patch` for fixes and small behavior changes, `minor` for additive user-facing features, and never create a `major` changeset without the operator's explicit approval for that release.
 - For maintenance-only PRs that should not appear in release notes, add an empty changeset with `bun run changeset -- --empty`.
-- Keep the top-level `CHANGELOG.md` as the released changelog artifact. It is updated during release prep with `bun run release:version`, not by normal feature/fix PRs.
-- Use the released changelog section as the starting point for the GitHub release body.
-- GitHub releases should follow this format:
-
-  ```md
-  ## What's Changed
-
-  - <change title> by @<author> in <PR URL>
-  - ...
-
-  **Full Changelog**: https://github.com/modem-dev/hunk/compare/<previous-tag>...<new-tag>
-  ```
-
-- Do not rely blindly on autogenerated GitHub release notes. After publishing, verify the release body and edit it if needed.
-- Prefer `gh release create/edit --notes-file` for multi-line release notes so the exact body is reviewed before posting.
-- After publishing, verify npm packages and GitHub release assets point at the new version. For Homebrew, Hunk is distributed through `Homebrew/homebrew-core`; do not open manual simple version-bump PRs yourself. Let Homebrew Autobump create the `hunk <version>` PR, then verify it merges and `brew install hunk` resolves to the new version. Only use `brew bump-formula-pr hunk --version <version>` if Homebrew maintainers request a manual bump or Autobump stalls unexpectedly.
+- Changesets owns package versions and `CHANGELOG.md`. Never edit either version or changelog by hand, run `changeset version` locally, publish from a terminal, or create release tags manually.
+- `.github/workflows/version-vsh.yml` opens or updates `chore(release): version packages`; the operator merges that PR themselves. Its merged exact SHA is the only automatic publish input.
+- `.github/workflows/release-vsh.yml` publishes restricted GitHub Packages with Bun, smoke-tests the exact registry version, verifies the scoped package tag, and only then creates the GitHub Release. Never add `.npmrc`, public-npm OIDC, or a user-managed package token.
+- The enabled native release targets are macOS arm64 and Linux x64 on standard GitHub-hosted runners. Other target records remain in `PLATFORM_PACKAGE_MATRIX` with `enabled: false`.
+- New package metadata, changelog links, package tags, and GitHub Releases belong to `victor-software-house/hunk`, never `modem-dev/hunk`.
+- Do not publish, tag, create a release, install the fork globally, or merge a release PR without explicit operator approval.
+- After the first publish, verify all three package versions in GitHub Packages, repository Actions access, the scoped package tag, the GitHub Release, and an isolated exact-version Bun install.
 - For patch releases and backports, list only changes actually present between the previous tag and the new tag on that release branch.
 - Prefer concise, user-visible entries over internal refactors unless the refactor changes user-visible behavior.
 - Keep each changeset summary to one concise user-facing sentence; put implementation detail in the PR or supporting docs.
