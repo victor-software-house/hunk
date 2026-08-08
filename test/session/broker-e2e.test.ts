@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cleanupTestConfigHomes, createTestConfigHome } from "../helpers/config-home";
+import { createScriptedTerminalTestCommand, shellQuote } from "../helpers/terminal-session";
 
 const repoRoot = process.cwd();
 const sourceEntrypoint = join(repoRoot, "src/main.tsx");
@@ -39,10 +40,14 @@ interface HealthResponse {
 interface SessionListJson {
   sessions: Array<{
     sessionId: string;
-    files: Array<{
-      path: string;
+    tabs: Array<{
+      files: Array<{ path: string }>;
     }>;
   }>;
+}
+
+function sessionHasFile(session: SessionListJson["sessions"][number], path: string) {
+  return session.tabs.some((tab) => tab.files.some((file) => file.path === path));
 }
 
 interface FixtureFiles {
@@ -60,10 +65,6 @@ function cleanupTempDirs() {
       rmSync(dir, { recursive: true, force: true });
     }
   }
-}
-
-function shellQuote(value: string) {
-  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 function stripTerminalControl(text: string) {
@@ -114,32 +115,63 @@ async function reserveLoopbackPort() {
   return port;
 }
 
-/** Start one real terminal session whose input the test can control directly. */
-function spawnHunkSession(fixture: FixtureFiles, port: number) {
-  const innerCommand = `bun run ${shellQuote(sourceEntrypoint)} diff ${shellQuote(fixture.before)} ${shellQuote(fixture.after)}`;
+/** Start either an interactively controlled upstream session or a bounded scripted session. */
+function spawnHunkSession(
+  fixture: FixtureFiles,
+  options:
+    | number
+    | {
+        port: number;
+        quitAfterSeconds?: number;
+        timeoutSeconds?: number;
+      },
+) {
+  const port = typeof options === "number" ? options : options.port;
+  const env = {
+    ...process.env,
+    XDG_CONFIG_HOME: testConfigHome,
+    TERM: "xterm-256color",
+    COLUMNS: "120",
+    LINES: "24",
+    HUNK_MCP_PORT: String(port),
+  };
 
-  return Bun.spawn(["script", "-q", "-f", "-e", "-c", innerCommand, fixture.transcript], {
+  if (typeof options === "number") {
+    const innerCommand = `bun run ${shellQuote(sourceEntrypoint)} diff ${shellQuote(fixture.before)} ${shellQuote(fixture.after)}`;
+    return Bun.spawn(["script", "-q", "-f", "-e", "-c", innerCommand, fixture.transcript], {
+      cwd: fixture.dir,
+      stdin: "pipe",
+      stdout: "ignore",
+      stderr: "pipe",
+      env,
+    });
+  }
+
+  const hunkCommand = createScriptedTerminalTestCommand({
+    argv: ["bun", "run", sourceEntrypoint, "diff", fixture.before, fixture.after],
+    transcript: fixture.transcript,
+    quitAfterSeconds: options.quitAfterSeconds ?? 6,
+    timeoutSeconds: options.timeoutSeconds ?? 8,
+  });
+  return Bun.spawn(["bash", "-lc", hunkCommand], {
     cwd: fixture.dir,
-    stdin: "pipe",
-    stdout: "ignore",
+    stdin: "ignore",
+    stdout: "pipe",
     stderr: "pipe",
-    env: {
-      ...process.env,
-      XDG_CONFIG_HOME: testConfigHome,
-      TERM: "xterm-256color",
-      COLUMNS: "120",
-      LINES: "24",
-      HUNK_MCP_PORT: String(port),
-    },
+    env,
   });
 }
 
 type HunkSessionProcess = ReturnType<typeof spawnHunkSession>;
 
 /** Ask the live app to quit, discarding a prompted view change when necessary. */
-async function quitHunkSession(proc: HunkSessionProcess, fixture: FixtureFiles, timeoutMs = 2_000) {
-  proc.stdin.write("q");
-  await proc.stdin.flush();
+async function quitHunkSession(proc: HunkSessionProcess, fixture: FixtureFiles, timeoutMs = 5_000) {
+  if (!proc.stdin) {
+    throw new Error("Interactive Hunk session has no writable stdin.");
+  }
+  const stdin = proc.stdin;
+  stdin.write("q");
+  await stdin.flush();
 
   const outcome = await waitUntil(
     "Hunk session exit or save-preferences prompt",
@@ -161,8 +193,8 @@ async function quitHunkSession(proc: HunkSessionProcess, fixture: FixtureFiles, 
   );
 
   if (outcome === "prompt") {
-    proc.stdin.write("q");
-    await proc.stdin.flush();
+    stdin.write("q");
+    await stdin.flush();
   }
 
   const result = await Promise.race([
@@ -302,8 +334,7 @@ describe("session broker end-to-end", () => {
       });
 
       const targetSession =
-        listed.find((session) => session.files.some((file) => file.path === fixture.afterName)) ??
-        listed[0]!;
+        listed.find((session) => sessionHasFile(session, fixture.afterName)) ?? listed[0]!;
       const comment = runSessionCli(
         [
           "comment",
@@ -407,18 +438,15 @@ describe("session broker end-to-end", () => {
         return parsed.sessions.length > 0 ? parsed.sessions : null;
       });
       const targetSession =
-        listed.find((session) => session.files.some((file) => file.path === fixture.afterName)) ??
-        listed[0]!;
+        listed.find((session) => sessionHasFile(session, fixture.afterName)) ?? listed[0]!;
 
       const initialContext = runSessionCli(["context", targetSession.sessionId, "--json"], port);
       expect(initialContext.proc.exitCode).toBe(0);
       expect(JSON.parse(initialContext.stdout)).toMatchObject({
         context: {
-          selectedFile: {
-            path: fixture.afterName,
-          },
-          selectedHunk: {
-            index: 0,
+          tab: {
+            selectedFile: { path: fixture.afterName },
+            selectedHunk: { index: 0 },
           },
         },
       });
@@ -442,9 +470,9 @@ describe("session broker end-to-end", () => {
         }
 
         const parsed = JSON.parse(context.stdout) as {
-          context?: { selectedHunk?: { index: number } };
+          context?: { tab?: { selectedHunk?: { index: number } } };
         };
-        return parsed.context?.selectedHunk?.index === 1 ? parsed : null;
+        return parsed.context?.tab?.selectedHunk?.index === 1 ? parsed : null;
       });
 
       expect(await quitHunkSession(hunkProc, fixture)).toBe(0);
@@ -497,12 +525,8 @@ describe("session broker end-to-end", () => {
         return parsed.sessions.length === 2 ? parsed.sessions : null;
       });
 
-      const sessionA = sessions.find((session) =>
-        session.files.some((file) => file.path === fixtureA.afterName),
-      );
-      const sessionB = sessions.find((session) =>
-        session.files.some((file) => file.path === fixtureB.afterName),
-      );
+      const sessionA = sessions.find((session) => sessionHasFile(session, fixtureA.afterName));
+      const sessionB = sessions.find((session) => sessionHasFile(session, fixtureB.afterName));
       expect(sessionA).toBeDefined();
       expect(sessionB).toBeDefined();
 

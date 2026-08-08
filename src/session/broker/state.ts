@@ -27,6 +27,17 @@ const hunkSessionBrokerView: SessionBrokerViewAdapter<
 > = {
   parseRegistration: parseSessionRegistration,
   parseSnapshot: parseSessionSnapshot,
+  matchesSession: (session, selector) => {
+    if (selector.sessionId) return session.sessionId === selector.sessionId;
+    if (selector.sessionPath) return session.cwd === selector.sessionPath;
+    if (!selector.repoRoot) return true;
+    const active = session.tabs.find((tab) => tab.tabId === session.activeTabId);
+    return active?.repoRoot === selector.repoRoot;
+  },
+  describeSession: (session) => {
+    const active = session.tabs.find((tab) => tab.tabId === session.activeTabId);
+    return `${session.sessionId} (${active?.name ?? session.activeTabId})`;
+  },
   buildListedSession: buildListedHunkSession,
   buildSelectedContext: buildSelectedHunkSessionContext,
   buildSessionReview: buildHunkSessionReview,

@@ -8,11 +8,15 @@ import type {
   SessionReloadCommandInput,
   SessionReviewCommandInput,
   SessionSelectorInput,
+  SessionTabAddCommandInput,
+  SessionTabRenameCommandInput,
+  SessionTabTargetCommandInput,
 } from "../core/types";
 import type {
   AppliedCommentBatchResult,
   AppliedCommentResult,
   ClearedCommentsResult,
+  ClosedReviewTabResult,
   ListedSession,
   NavigatedSelectionResult,
   ReloadedSessionResult,
@@ -21,6 +25,7 @@ import type {
   SessionLiveCommentSummary,
   SessionReview,
   SessionReviewNoteSummary,
+  MutatedReviewTabResult,
 } from "./types";
 
 export const HUNK_SESSION_API_PATH = "/session-api";
@@ -32,7 +37,7 @@ export const HUNK_SESSION_API_VERSION = 1;
  * builds can refresh an older daemon even when it still exposes the same API endpoints. Bump this
  * when daemon-forwarded payloads change, even if the supported action names stay stable.
  */
-export const HUNK_SESSION_DAEMON_VERSION = 6;
+export const HUNK_SESSION_DAEMON_VERSION = 7;
 
 export type SessionDaemonAction =
   | "list"
@@ -41,6 +46,10 @@ export type SessionDaemonAction =
   | "review"
   | "navigate"
   | "reload"
+  | "tab-add"
+  | "tab-select"
+  | "tab-rename"
+  | "tab-close"
   | "comment-add"
   | "comment-apply"
   | "comment-list"
@@ -87,6 +96,29 @@ export type SessionDaemonRequest =
       sourcePath?: string;
     }
   | {
+      action: "tab-add";
+      selector: SessionTabAddCommandInput["selector"];
+      name: string;
+      sourcePath: string;
+      input: SessionTabAddCommandInput["input"];
+    }
+  | {
+      action: "tab-select";
+      selector: SessionTabTargetCommandInput["selector"];
+      tab: string;
+    }
+  | {
+      action: "tab-close";
+      selector: SessionTabTargetCommandInput["selector"];
+      tab: string;
+    }
+  | {
+      action: "tab-rename";
+      selector: SessionTabRenameCommandInput["selector"];
+      tab: string;
+      name: string;
+    }
+  | {
       action: "comment-add";
       selector: SessionCommentAddCommandInput["selector"];
       filePath: string;
@@ -129,6 +161,8 @@ export type SessionDaemonResponse =
   | { review: SessionReview }
   | { result: NavigatedSelectionResult }
   | { result: ReloadedSessionResult }
+  | { result: MutatedReviewTabResult }
+  | { result: ClosedReviewTabResult }
   | { result: AppliedCommentResult }
   | { result: AppliedCommentBatchResult }
   | { comments: Array<SessionLiveCommentSummary | SessionReviewNoteSummary> }

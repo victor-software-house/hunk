@@ -124,6 +124,26 @@ const RELOAD_SECTION = [
   "- `--session-path` targets the live window when you need to keep session selection separate from reload source",
 ];
 
+const TABS_SECTION = [
+  "### Review tabs",
+  "",
+  "One Hunk process can keep independent named project reviews mounted. Create a tab with its project directory and full review command after `--`; target later mutations by stable tab id or unique name:",
+  "",
+  ...bashFence(
+    synopsisLines(
+      commands["tab-add"],
+      commands["tab-select"],
+      commands["tab-rename"],
+      commands["tab-close"],
+    ),
+  ),
+  "",
+  "- `tab add` activates the new tab and accepts the same `diff` / `show` review syntax as a normal launch",
+  "- `--source` is the new tab's project directory; the outer selector still identifies the existing Hunk process",
+  "- `--tab` resolves a stable tab id first, then a unique normalized name",
+  "- Ordinary navigate, reload, and comment commands continue to target only the active tab",
+];
+
 const COMMENTS_SECTION = [
   "### Comments",
   "",
@@ -216,6 +236,7 @@ export function renderHunkReviewSkill() {
     INSPECT_SECTION,
     NAVIGATE_SECTION,
     RELOAD_SECTION,
+    TABS_SECTION,
     COMMENTS_SECTION,
     STML_SECTION,
     NEW_FILES_SECTION,
