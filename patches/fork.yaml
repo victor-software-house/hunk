@@ -1,0 +1,143 @@
+%YAML 1.2
+---
+schema: 1
+downstream:
+  remote: origin
+  branch: main
+  recovery_tag_prefix: forkctl/recovery
+upstream:
+  remote: upstream
+  url: https://github.com/modem-dev/hunk.git
+  fetch_ref: refs/heads/main
+base:
+  target:
+    kind: commit
+    selector: 1306bd89f24f016ff4bde08abd94693bab2db974
+    commit: 1306bd89f24f016ff4bde08abd94693bab2db974
+  canonical: 1306bd89f24f016ff4bde08abd94693bab2db974
+  stack: 1306bd89f24f016ff4bde08abd94693bab2db974
+documents:
+  ledger: PATCHES.md
+  exports: patches/downstream
+bookkeeping_patch: fork-tooling
+patches:
+  - name: review-range-api
+    kind: source
+    purpose: >-
+      Expose bounded review history and range replacement through the extension
+      contract.
+    upstream_status: not-submitted
+    drop_when: Upstream provides equivalent bounded history and review-range replacement APIs.
+    scope:
+      - .changeset/bright-review-ranges.md
+      - docs/extension-architecture.md
+      - docs/extensions.md
+      - src/core/vcs/**
+      - src/extension-api/**
+      - src/extensions/**
+      - src/ui/**
+  - name: multi-project-reviews
+    kind: source
+    purpose: >-
+      Host independent named project reviews across the daemon, agent surface, and
+      terminal UI.
+    upstream_status: "not-submitted: downstream multi-project review workflow"
+    drop_when: >-
+      Upstream supports equivalent independent named project reviews across TUI and
+      agent control.
+    scope:
+      - .changeset/calm-review-tabs.md
+      - docs/agent-workflows.md
+      - skills/**
+      - packages/**
+      - src/app/**
+      - src/core/**
+      - src/extensions/**
+      - src/hunk-review/**
+      - src/session/**
+      - src/ui/**
+      - test/**
+      - website/**
+  - name: files-history-navigator
+    kind: source
+    purpose: >-
+      Add a collapsible Files tree and bounded local History range navigator to the
+      built-in sidebar.
+    upstream_status: not-submitted
+    drop_when: >-
+      Upstream provides equivalent collapsible file navigation and two-endpoint local
+      history selection.
+    scope:
+      - .changeset/quick-file-history.md
+      - README.md
+      - src/extension-api/**
+      - src/extensions/default/ui/sidebar/**
+      - src/ui/**
+      - test/pty/nav.test.ts
+  - name: vsh-distribution
+    kind: tooling
+    purpose: >-
+      Own VSH package identity, GitHub Packages native distribution, release
+      validation, and pinned repository tooling.
+    upstream_status: "inappropriate: downstream package identity and release ownership"
+    drop_when: The VSH Hunk fork and its scoped distribution are retired.
+    scope:
+      - .changeset/**
+      - .envrc
+      - .github/**
+      - AGENTS.md
+      - CHANGELOG.md
+      - README.md
+      - bin/**
+      - bun.lock
+      - bunfig.toml
+      - commitlint.config.mjs
+      - docs/**
+      - examples/**
+      - lefthook.yml
+      - mise.lock
+      - mise.toml
+      - package.json
+      - scripts/**
+      - src/**
+      - test/**
+      - tsconfig.json
+      - vercel.json
+      - website/**
+    checks:
+      - name: stale-extension-import
+        run: "! grep -n 'from \"hunkdiff/extension\"' {files}"
+        glob:
+          - src/**/*.ts
+          - src/**/*.tsx
+          - scripts/**/*.ts
+          - test/**/*.ts
+          - examples/**/*.ts
+          - examples/**/*.tsx
+          - packages/**/*.ts
+        at: stack
+  - name: fork-tooling
+    kind: tooling
+    purpose: Own fork policy, generated evidence, and integration configuration.
+    upstream_status: "inappropriate: downstream-only fork maintenance"
+    drop_when: The downstream fork is retired.
+    scope:
+      - patches/fork.yaml
+      - PATCHES.md
+      - patches/downstream/**
+      - FORK.md
+      - AGENTS.md
+      - mise.toml
+      - mise.lock
+      - lefthook.yml
+      - .oxfmtrc.json
+      - .github/workflows/ci.yml
+disabled_patches: []
+history: []
+contracts:
+  allow_base: []
+  required_text:
+    - path: FORK.md
+      contains: mise run fork check
+    - path: AGENTS.md
+      contains: Forkctl and StGit own every downstream change
