@@ -142,6 +142,7 @@ describe("PTY chrome", () => {
 
       expect(initial).toContain("add = true");
       expect(initial).toContain("betaValue");
+      await harness.ensureKeyboardIsLive(session);
 
       await session.press("tab");
       await session.type("beta");
