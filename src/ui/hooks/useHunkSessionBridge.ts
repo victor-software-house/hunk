@@ -1,8 +1,9 @@
 import { useEffect, useMemo } from "react";
 import type { CliInput, DiffFile } from "../../core/types";
 import { hunkLineRange } from "../../core/liveComments";
-import { createHunkSessionBridge } from "../../session/app/bridge";
+import { createHunkSessionBridge, type HunkSessionAppBridge } from "../../session/app/bridge";
 import type {
+  HunkReviewTabState,
   HunkSessionBrokerClient,
   ReloadedSessionResult,
   ReloadSessionOptions,
@@ -10,6 +11,12 @@ import type {
   SessionReviewNoteSummary,
 } from "../../session/types";
 import type { ReviewController } from "./useReviewController";
+
+export interface HunkSessionBinding {
+  tabId: string;
+  onBridge: (tabId: string, bridge: HunkSessionAppBridge | null) => void;
+  onSnapshot: (state: HunkReviewTabState) => void;
+}
 
 /** Bridge one live Hunk review session to the local session daemon. */
 export function useHunkSessionBridge({
@@ -30,6 +37,7 @@ export function useHunkSessionBridge({
   selectedHunk,
   selectedHunkIndex,
   showAgentNotes,
+  sessionBinding,
 }: {
   addLiveComment: ReviewController["addLiveComment"];
   addLiveCommentBatch: ReviewController["addLiveCommentBatch"];
@@ -52,6 +60,7 @@ export function useHunkSessionBridge({
   selectedHunk: DiffFile["metadata"]["hunks"][number] | undefined;
   selectedHunkIndex: number;
   showAgentNotes: boolean;
+  sessionBinding?: HunkSessionBinding;
 }) {
   const bridge = useMemo(
     () =>
@@ -76,6 +85,10 @@ export function useHunkSessionBridge({
   );
 
   useEffect(() => {
+    if (sessionBinding) {
+      sessionBinding.onBridge(sessionBinding.tabId, bridge);
+      return () => sessionBinding.onBridge(sessionBinding.tabId, null);
+    }
     if (!hostClient) {
       return;
     }
@@ -85,34 +98,34 @@ export function useHunkSessionBridge({
     return () => {
       hostClient.setBridge(null);
     };
-  }, [bridge, hostClient]);
+  }, [bridge, hostClient, sessionBinding]);
 
   useEffect(() => {
     const selectedRange = selectedHunk ? hunkLineRange(selectedHunk) : undefined;
-    const activeTabId = hostClient?.getRegistration().info.activeTabId;
-    if (!hostClient || !activeTabId) return;
+    const tabId = sessionBinding?.tabId ?? hostClient?.getRegistration().info.activeTabId;
+    if (!tabId) return;
+    const tabState: HunkReviewTabState = {
+      tabId,
+      selectedFileId: selectedFile?.id,
+      selectedFilePath: selectedFile?.path,
+      selectedHunkIndex,
+      selectedHunkOldRange: selectedRange?.oldRange,
+      selectedHunkNewRange: selectedRange?.newRange,
+      showAgentNotes,
+      noteMarkupWidth,
+      liveCommentCount,
+      liveComments: liveCommentSummaries,
+      reviewNoteCount,
+      reviewNotes: reviewNoteSummaries,
+    };
 
-    hostClient.updateSnapshot({
+    if (sessionBinding) {
+      sessionBinding.onSnapshot(tabState);
+      return;
+    }
+    hostClient?.updateSnapshot({
       updatedAt: new Date().toISOString(),
-      state: {
-        activeTabId,
-        tabs: [
-          {
-            tabId: activeTabId,
-            selectedFileId: selectedFile?.id,
-            selectedFilePath: selectedFile?.path,
-            selectedHunkIndex,
-            selectedHunkOldRange: selectedRange?.oldRange,
-            selectedHunkNewRange: selectedRange?.newRange,
-            showAgentNotes,
-            noteMarkupWidth,
-            liveCommentCount,
-            liveComments: liveCommentSummaries,
-            reviewNoteCount,
-            reviewNotes: reviewNoteSummaries,
-          },
-        ],
-      },
+      state: { activeTabId: tabId, tabs: [tabState] },
     });
   }, [
     hostClient,
@@ -126,5 +139,6 @@ export function useHunkSessionBridge({
     selectedHunk,
     selectedHunkIndex,
     showAgentNotes,
+    sessionBinding,
   ]);
 }

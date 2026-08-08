@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cleanupTestConfigHomes, createTestConfigHome } from "../helpers/config-home";
+import { createScriptedTerminalTestCommand } from "../helpers/terminal-session";
 
 const repoRoot = process.cwd();
 const sourceEntrypoint = join(repoRoot, "src/main.tsx");
@@ -28,10 +29,14 @@ interface HealthResponse {
 interface SessionListJson {
   sessions: Array<{
     sessionId: string;
-    files: Array<{
-      path: string;
+    tabs: Array<{
+      files: Array<{ path: string }>;
     }>;
   }>;
+}
+
+function sessionHasFile(session: SessionListJson["sessions"][number], path: string) {
+  return session.tabs.some((tab) => tab.files.some((file) => file.path === path));
 }
 
 interface FixtureFiles {
@@ -49,10 +54,6 @@ function cleanupTempDirs() {
       rmSync(dir, { recursive: true, force: true });
     }
   }
-}
-
-function shellQuote(value: string) {
-  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 function stripTerminalControl(text: string) {
@@ -115,12 +116,12 @@ function spawnHunkSession(
     timeoutSeconds?: number;
   },
 ) {
-  const innerCommand = `bun run ${shellQuote(sourceEntrypoint)} diff ${shellQuote(fixture.before)} ${shellQuote(fixture.after)}`;
-  const hunkCommand = [
-    `(sleep ${quitAfterSeconds}; printf q) | timeout ${timeoutSeconds} script -q -f -e -c`,
-    shellQuote(innerCommand),
-    shellQuote(fixture.transcript),
-  ].join(" ");
+  const hunkCommand = createScriptedTerminalTestCommand({
+    argv: ["bun", "run", sourceEntrypoint, "diff", fixture.before, fixture.after],
+    transcript: fixture.transcript,
+    quitAfterSeconds,
+    timeoutSeconds,
+  });
 
   return Bun.spawn(["bash", "-lc", hunkCommand], {
     cwd: fixture.dir,
@@ -233,8 +234,7 @@ describe("session broker end-to-end", () => {
       });
 
       const targetSession =
-        listed.find((session) => session.files.some((file) => file.path === fixture.afterName)) ??
-        listed[0]!;
+        listed.find((session) => sessionHasFile(session, fixture.afterName)) ?? listed[0]!;
       const comment = runSessionCli(
         [
           "comment",
@@ -336,18 +336,15 @@ describe("session broker end-to-end", () => {
         return parsed.sessions.length > 0 ? parsed.sessions : null;
       });
       const targetSession =
-        listed.find((session) => session.files.some((file) => file.path === fixture.afterName)) ??
-        listed[0]!;
+        listed.find((session) => sessionHasFile(session, fixture.afterName)) ?? listed[0]!;
 
       const initialContext = runSessionCli(["context", targetSession.sessionId, "--json"], port);
       expect(initialContext.proc.exitCode).toBe(0);
       expect(JSON.parse(initialContext.stdout)).toMatchObject({
         context: {
-          selectedFile: {
-            path: fixture.afterName,
-          },
-          selectedHunk: {
-            index: 0,
+          tab: {
+            selectedFile: { path: fixture.afterName },
+            selectedHunk: { index: 0 },
           },
         },
       });
@@ -371,9 +368,9 @@ describe("session broker end-to-end", () => {
         }
 
         const parsed = JSON.parse(context.stdout) as {
-          context?: { selectedHunk?: { index: number } };
+          context?: { tab?: { selectedHunk?: { index: number } } };
         };
-        return parsed.context?.selectedHunk?.index === 1 ? parsed : null;
+        return parsed.context?.tab?.selectedHunk?.index === 1 ? parsed : null;
       });
 
       const hunkExitCode = await hunkProc.exited;
@@ -436,12 +433,8 @@ describe("session broker end-to-end", () => {
         return parsed.sessions.length === 2 ? parsed.sessions : null;
       });
 
-      const sessionA = sessions.find((session) =>
-        session.files.some((file) => file.path === fixtureA.afterName),
-      );
-      const sessionB = sessions.find((session) =>
-        session.files.some((file) => file.path === fixtureB.afterName),
-      );
+      const sessionA = sessions.find((session) => sessionHasFile(session, fixtureA.afterName));
+      const sessionB = sessions.find((session) => sessionHasFile(session, fixtureB.afterName));
       expect(sessionA).toBeDefined();
       expect(sessionB).toBeDefined();
 

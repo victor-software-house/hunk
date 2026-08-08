@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cleanupTestConfigHomes, createTestConfigHome } from "../helpers/config-home";
+import { createTerminalTranscriptCommand, shellQuote } from "../helpers/terminal-session";
 
 const repoRoot = process.cwd();
 const sourceEntrypoint = join(repoRoot, "src/main.tsx");
@@ -30,10 +31,6 @@ function cleanupTempDirs() {
       rmSync(dir, { recursive: true, force: true });
     }
   }
-}
-
-function shellQuote(value: string) {
-  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 function stripTerminalControl(text: string) {
@@ -165,7 +162,11 @@ async function runTtySmoke(options: {
   }
 
   const hunkCommand = `bun run ${shellQuote(sourceEntrypoint)} ${args.map(shellQuote).join(" ")}`;
-  const scriptCommand = `timeout 7 script -q -f -e -c ${shellQuote(hunkCommand)} ${shellQuote(transcript)}`;
+  const scriptCommand = createTerminalTranscriptCommand({
+    command: hunkCommand,
+    transcript,
+    timeoutSeconds: 7,
+  });
   const inputCommand = options.inputCommand ?? `(sleep 2; printf q)`;
   const proc = Bun.spawnSync(["bash", "-lc", `${inputCommand} | ${scriptCommand}`], {
     cwd: fixture.dir,
@@ -176,6 +177,8 @@ async function runTtySmoke(options: {
       ...process.env,
       XDG_CONFIG_HOME: testConfigHome,
       TERM: "xterm-256color",
+      COLUMNS: "120",
+      LINES: "24",
       HUNK_MCP_DISABLE: "1",
       HUNK_DISABLE_UPDATE_NOTICE: "1",
     },
@@ -198,8 +201,12 @@ async function runStdinPagerSmoke(options?: {
   const fixture = createFixtureFiles(options?.lines ?? 1);
   const transcript = join(fixture.dir, "stdin-pager-transcript.txt");
   const subcommand = options?.command === "pager" ? "pager" : "patch -";
-  const patchCommand = `cat ${shellQuote(fixture.coloredPatch)} | bun run ${shellQuote(sourceEntrypoint)} ${subcommand}`;
-  const scriptCommand = `timeout 7 script -q -f -e -c ${shellQuote(patchCommand)} ${shellQuote(transcript)}`;
+  const patchCommand = `stty cols 120 rows 24 && cat ${shellQuote(fixture.coloredPatch)} | bun run ${shellQuote(sourceEntrypoint)} ${subcommand}`;
+  const scriptCommand = createTerminalTranscriptCommand({
+    command: patchCommand,
+    transcript,
+    timeoutSeconds: 7,
+  });
   const inputCommand =
     options?.inputCommand ?? `(sleep 2; printf ${shellQuote(options?.input ?? "q")})`;
   const proc = Bun.spawnSync(["bash", "-lc", `${inputCommand} | ${scriptCommand}`], {
@@ -211,6 +218,8 @@ async function runStdinPagerSmoke(options?: {
       ...process.env,
       XDG_CONFIG_HOME: testConfigHome,
       TERM: "xterm-256color",
+      COLUMNS: "120",
+      LINES: "24",
       HUNK_MCP_DISABLE: "1",
       HUNK_DISABLE_UPDATE_NOTICE: "1",
     },

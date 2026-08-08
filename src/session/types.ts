@@ -111,6 +111,20 @@ export interface ReloadSessionToolInput extends SessionTargetInput {
   sourcePath?: string;
 }
 
+export interface AddReviewTabToolInput extends SessionTargetInput {
+  name: string;
+  sourcePath: string;
+  input: CliInput;
+}
+
+export interface TargetReviewTabToolInput extends SessionTargetInput {
+  tab: string;
+}
+
+export interface RenameReviewTabToolInput extends TargetReviewTabToolInput {
+  name: string;
+}
+
 export interface ListCommentsToolInput extends SessionTargetInput {
   filePath?: string;
 }
@@ -217,6 +231,30 @@ export interface ReloadedSessionResult {
   selectedHunkIndex: number;
 }
 
+export interface SessionReviewTabSummary {
+  tabId: string;
+  name: string;
+  cwd: string;
+  repoRoot?: string;
+  inputKind: CliInput["kind"];
+  title: string;
+  sourceLabel: string;
+  fileCount: number;
+}
+
+export interface MutatedReviewTabResult {
+  sessionId: string;
+  activeTabId: string;
+  tab: SessionReviewTabSummary;
+}
+
+export interface ClosedReviewTabResult {
+  sessionId: string;
+  activeTabId: string;
+  closedTabId: string;
+  activeTab: SessionReviewTabSummary;
+}
+
 /** One listed review tab with summarized files and its live state nested beside it. */
 export interface ListedReviewTab extends Omit<HunkReviewTabInfo, "files"> {
   files: SessionFileSummary[];
@@ -283,7 +321,9 @@ export type HunkSessionCommandResult =
   | NavigatedSelectionResult
   | RemovedCommentResult
   | ClearedCommentsResult
-  | ReloadedSessionResult;
+  | ReloadedSessionResult
+  | MutatedReviewTabResult
+  | ClosedReviewTabResult;
 
 export type HunkSessionClientMessage = SessionClientMessage<
   HunkSessionInfo,
@@ -303,5 +343,9 @@ export type HunkSessionServerMessage =
   | SessionServerMessage<"comment_batch", CommentBatchToolInput>
   | SessionServerMessage<"navigate_to_hunk", NavigateToHunkToolInput>
   | SessionServerMessage<"reload_session", ReloadSessionToolInput>
+  | SessionServerMessage<"add_review_tab", AddReviewTabToolInput>
+  | SessionServerMessage<"select_review_tab", TargetReviewTabToolInput>
+  | SessionServerMessage<"rename_review_tab", RenameReviewTabToolInput>
+  | SessionServerMessage<"close_review_tab", TargetReviewTabToolInput>
   | SessionServerMessage<"remove_comment", RemoveCommentToolInput>
   | SessionServerMessage<"clear_comments", ClearCommentsToolInput>;

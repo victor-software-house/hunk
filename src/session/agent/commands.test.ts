@@ -73,6 +73,10 @@ function createClient(overrides: Partial<HunkDaemonCliClient>): HunkDaemonCliCli
         "review",
         "navigate",
         "reload",
+        "tab-add",
+        "tab-select",
+        "tab-rename",
+        "tab-close",
         "comment-add",
         "comment-apply",
         "comment-list",
@@ -97,6 +101,63 @@ function createClient(overrides: Partial<HunkDaemonCliClient>): HunkDaemonCliCli
       fileCount: 1,
       selectedFilePath: "README.md",
       selectedHunkIndex: 0,
+    }),
+    addTab: async () => ({
+      sessionId: "session-1",
+      activeTabId: "tab-2",
+      tab: {
+        tabId: "tab-2",
+        name: "api",
+        cwd: "/api",
+        repoRoot: "/api",
+        inputKind: "vcs",
+        title: "api working tree",
+        sourceLabel: "/api",
+        fileCount: 1,
+      },
+    }),
+    selectTab: async () => ({
+      sessionId: "session-1",
+      activeTabId: "tab-1",
+      tab: {
+        tabId: "tab-1",
+        name: "repo",
+        cwd: "/repo",
+        repoRoot: "/repo",
+        inputKind: "vcs",
+        title: "repo working tree",
+        sourceLabel: "/repo",
+        fileCount: 1,
+      },
+    }),
+    renameTab: async () => ({
+      sessionId: "session-1",
+      activeTabId: "tab-1",
+      tab: {
+        tabId: "tab-1",
+        name: "renamed",
+        cwd: "/repo",
+        repoRoot: "/repo",
+        inputKind: "vcs",
+        title: "repo working tree",
+        sourceLabel: "/repo",
+        fileCount: 1,
+      },
+    }),
+    closeTab: async () => ({
+      sessionId: "session-1",
+      activeTabId: "tab-1",
+      closedTabId: "tab-2",
+      activeTab: {
+        tabId: "tab-1",
+        name: "repo",
+        cwd: "/repo",
+        repoRoot: "/repo",
+        inputKind: "vcs",
+        title: "repo working tree",
+        sourceLabel: "/repo",
+        fileCount: 1,
+      },
     }),
     addComment: async () => ({
       commentId: "comment-1",
@@ -558,6 +619,59 @@ describe("session command compatibility checks", () => {
         selectedHunkIndex: 0,
       },
     });
+  });
+
+  test("routes tab add, select, rename, and close commands", async () => {
+    const selector: SessionSelectorInput = { sessionId: "session-1" };
+    const calls: string[] = [];
+    setSessionCommandTestHooks({
+      createClient: () =>
+        createClient({
+          addTab: async (input) => {
+            calls.push(`${input.action}:${input.name}:${input.sourcePath}`);
+            return createClient({}).addTab(input);
+          },
+          selectTab: async (input) => {
+            calls.push(`${input.action}:${input.tab}`);
+            return createClient({}).selectTab(input);
+          },
+          renameTab: async (input) => {
+            calls.push(`${input.action}:${input.tab}:${input.name}`);
+            return createClient({}).renameTab(input);
+          },
+          closeTab: async (input) => {
+            calls.push(`${input.action}:${input.tab}`);
+            return createClient({}).closeTab(input);
+          },
+        }),
+      resolveDaemonAvailability: async () => true,
+    });
+
+    const common = { kind: "session" as const, output: "text" as const, selector };
+    expect(
+      await runSessionCommand({
+        ...common,
+        action: "tab-add",
+        name: "api",
+        sourcePath: "/api",
+        input: { kind: "vcs", staged: false, options: {} },
+      }),
+    ).toContain("Added tab api");
+    expect(await runSessionCommand({ ...common, action: "tab-select", tab: "repo" })).toContain(
+      "Selected tab repo",
+    );
+    expect(
+      await runSessionCommand({ ...common, action: "tab-rename", tab: "repo", name: "backend" }),
+    ).toContain("Renamed tab renamed");
+    expect(await runSessionCommand({ ...common, action: "tab-close", tab: "backend" })).toContain(
+      "Closed tab tab-2",
+    );
+    expect(calls).toEqual([
+      "tab-add:api:/api",
+      "tab-select:repo",
+      "tab-rename:repo:backend",
+      "tab-close:backend",
+    ]);
   });
 
   test("passes a separate source path through reload commands", async () => {

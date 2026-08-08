@@ -15,6 +15,7 @@ import type {
   AppliedCommentBatchResult,
   AppliedCommentResult,
   ClearedCommentsResult,
+  ClosedReviewTabResult,
   ListedSession,
   NavigatedSelectionResult,
   ReloadedSessionResult,
@@ -23,6 +24,7 @@ import type {
   SessionLiveCommentSummary,
   SessionReview,
   SessionReviewNoteSummary,
+  MutatedReviewTabResult,
 } from "../types";
 import type {
   SessionCommentAddCommandInput,
@@ -34,6 +36,9 @@ import type {
   SessionReloadCommandInput,
   SessionReviewCommandInput,
   SessionSelectorInput,
+  SessionTabAddCommandInput,
+  SessionTabRenameCommandInput,
+  SessionTabTargetCommandInput,
 } from "../../core/types";
 import { describeSessionSelector } from "@hunk/session-broker-core";
 
@@ -45,6 +50,10 @@ export interface HunkSessionCliClient {
   getSessionReview(input: SessionReviewCommandInput): Promise<SessionReview>;
   navigateToHunk(input: SessionNavigateCommandInput): Promise<NavigatedSelectionResult>;
   reloadSession(input: SessionReloadCommandInput): Promise<ReloadedSessionResult>;
+  addTab(input: SessionTabAddCommandInput): Promise<MutatedReviewTabResult>;
+  selectTab(input: SessionTabTargetCommandInput): Promise<MutatedReviewTabResult>;
+  renameTab(input: SessionTabRenameCommandInput): Promise<MutatedReviewTabResult>;
+  closeTab(input: SessionTabTargetCommandInput): Promise<ClosedReviewTabResult>;
   addComment(input: SessionCommentAddCommandInput): Promise<AppliedCommentResult>;
   applyComments(input: SessionCommentApplyCommandInput): Promise<AppliedCommentBatchResult>;
   listComments(
@@ -145,6 +154,49 @@ class HttpHunkSessionCliClient implements HunkSessionCliClient {
         selector: input.selector,
         nextInput: input.nextInput,
         sourcePath: input.sourcePath,
+      })
+    ).result;
+  }
+
+  async addTab(input: SessionTabAddCommandInput) {
+    return (
+      await this.request<{ result: MutatedReviewTabResult }>({
+        action: "tab-add",
+        selector: input.selector,
+        name: input.name,
+        sourcePath: input.sourcePath,
+        input: input.input,
+      })
+    ).result;
+  }
+
+  async selectTab(input: SessionTabTargetCommandInput) {
+    return (
+      await this.request<{ result: MutatedReviewTabResult }>({
+        action: "tab-select",
+        selector: input.selector,
+        tab: input.tab,
+      })
+    ).result;
+  }
+
+  async renameTab(input: SessionTabRenameCommandInput) {
+    return (
+      await this.request<{ result: MutatedReviewTabResult }>({
+        action: "tab-rename",
+        selector: input.selector,
+        tab: input.tab,
+        name: input.name,
+      })
+    ).result;
+  }
+
+  async closeTab(input: SessionTabTargetCommandInput) {
+    return (
+      await this.request<{ result: ClosedReviewTabResult }>({
+        action: "tab-close",
+        selector: input.selector,
+        tab: input.tab,
       })
     ).result;
   }
@@ -448,6 +500,17 @@ export function formatReloadOutput(selector: SessionSelectorInput, result: Reloa
     ? `${formatSessionPath(result.selectedFilePath)} hunk ${result.selectedHunkIndex + 1}`
     : "(no files)";
   return `Reloaded ${formatSessionSelector(selector)} with ${formatSessionPath(result.title)} (${result.fileCount} files). Selected: ${selected}.\n`;
+}
+
+export function formatTabMutationOutput(
+  action: "added" | "selected" | "renamed",
+  result: MutatedReviewTabResult,
+) {
+  return `${action[0]!.toUpperCase()}${action.slice(1)} tab ${formatSessionPath(result.tab.name)} (${result.tab.tabId}) in session ${result.sessionId}.\n`;
+}
+
+export function formatTabCloseOutput(result: ClosedReviewTabResult) {
+  return `Closed tab ${result.closedTabId}. Active: ${formatSessionPath(result.activeTab.name)} (${result.activeTab.tabId}).\n`;
 }
 
 /** Format the STML render notes attached to one applied comment, if any. */

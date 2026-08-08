@@ -92,6 +92,46 @@ describe("HTTP Hunk session CLI client", () => {
           filePath: "src/app.ts",
         },
       },
+      "tab-add": {
+        result: {
+          sessionId: "session-1",
+          activeTabId: "tab-2",
+          tab: {
+            tabId: "tab-2",
+            name: "api",
+            cwd: "/api",
+            repoRoot: "/api",
+            inputKind: "vcs" as const,
+            title: "api working tree",
+            sourceLabel: "/api",
+            fileCount: 1,
+          },
+        },
+      },
+      "tab-select": { result: undefined as unknown },
+      "tab-rename": { result: undefined as unknown },
+      "tab-close": {
+        result: {
+          sessionId: "session-1",
+          activeTabId: "tab-1",
+          closedTabId: "tab-2",
+          activeTab: {
+            tabId: "tab-1",
+            name: "repo",
+            cwd: "/repo",
+            repoRoot: "/repo",
+            inputKind: "vcs" as const,
+            title: "repo working tree",
+            sourceLabel: "/repo",
+            fileCount: 1,
+          },
+        },
+      },
+    };
+    responses["tab-select"].result = responses["tab-add"].result;
+    responses["tab-rename"].result = {
+      ...responses["tab-add"].result,
+      tab: { ...responses["tab-add"].result.tab, name: "backend" },
     };
 
     globalThis.fetch = (async (input, init) => {
@@ -150,6 +190,45 @@ describe("HTTP Hunk session CLI client", () => {
         output: "json",
       }),
     ).toMatchObject({ title: "repo working tree" });
+    expect(
+      await client.addTab({
+        kind: "session",
+        action: "tab-add",
+        selector,
+        name: "api",
+        sourcePath: "/api",
+        input: { kind: "vcs", range: "main...feature", staged: false, options: {} },
+        output: "json",
+      }),
+    ).toMatchObject({ activeTabId: "tab-2", tab: { name: "api" } });
+    expect(
+      await client.selectTab({
+        kind: "session",
+        action: "tab-select",
+        selector,
+        tab: "api",
+        output: "json",
+      }),
+    ).toMatchObject({ tab: { name: "api" } });
+    expect(
+      await client.renameTab({
+        kind: "session",
+        action: "tab-rename",
+        selector,
+        tab: "api",
+        name: "backend",
+        output: "json",
+      }),
+    ).toMatchObject({ tab: { name: "backend" } });
+    expect(
+      await client.closeTab({
+        kind: "session",
+        action: "tab-close",
+        selector,
+        tab: "backend",
+        output: "json",
+      }),
+    ).toMatchObject({ closedTabId: "tab-2", activeTab: { name: "repo" } });
     expect(
       await client.addComment({
         kind: "session",
@@ -224,6 +303,16 @@ describe("HTTP Hunk session CLI client", () => {
         nextInput: { kind: "vcs", staged: false, options: {} },
         sourcePath: "/repo",
       },
+      {
+        action: "tab-add",
+        selector,
+        name: "api",
+        sourcePath: "/api",
+        input: { kind: "vcs", range: "main...feature", staged: false, options: {} },
+      },
+      { action: "tab-select", selector, tab: "api" },
+      { action: "tab-rename", selector, tab: "api", name: "backend" },
+      { action: "tab-close", selector, tab: "backend" },
       {
         action: "comment-add",
         selector,

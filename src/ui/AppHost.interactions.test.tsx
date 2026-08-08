@@ -1966,7 +1966,7 @@ describe("App interactions", () => {
       let frame = setup.captureCharFrame();
       expect(frame).toContain("DiffPane.tsx");
       expect(frame).toContain("··· 362 unchanged lines ···");
-      expect(frame).not.toContain("366 - export const line366 = 366;");
+      expect(frame).not.toContain("367   export const line367 = 367;");
 
       await act(async () => {
         await setup.mockInput.pressArrow("down");
@@ -1978,9 +1978,9 @@ describe("App interactions", () => {
       });
 
       frame = await waitForFrame(setup, (nextFrame) =>
-        nextFrame.includes("366 - export const line366 = 366;"),
+        nextFrame.includes("367   export const line367 = 367;"),
       );
-      expect(frame).toContain("366 - export const line366 = 366;");
+      expect(frame).toContain("367   export const line367 = 367;");
     } finally {
       await act(async () => {
         setup.renderer.destroy();
@@ -2014,7 +2014,7 @@ describe("App interactions", () => {
       });
 
       let frame = await waitForFrame(setup, (nextFrame) =>
-        nextFrame.includes("366 - export const line366 = 366;"),
+        nextFrame.includes("367   export const line367 = 367;"),
       );
 
       await act(async () => {
@@ -2033,7 +2033,7 @@ describe("App interactions", () => {
           (nextFrame.match(/DiffPane\.tsx/g) ?? []).length === initialHeaderCount,
       );
       expect(frame).toContain("··· 362 unchanged lines ···");
-      expect(frame).not.toContain("366 - export const line366 = 366;");
+      expect(frame).not.toContain("367   export const line367 = 367;");
       expect((frame.match(/DiffPane\.tsx/g) ?? []).length).toBe(initialHeaderCount);
     } finally {
       await act(async () => {
@@ -3385,7 +3385,7 @@ describe("App interactions", () => {
 
       await act(async () => {
         // Click inside the second file row below the repo-root group header.
-        await setup.mockMouse.click(6, 5);
+        await setup.mockMouse.click(6, 4);
       });
       await flush(setup);
 

@@ -58,7 +58,7 @@ function buildSessionFiles(bootstrap: AppBootstrap): SessionReviewFile[] {
 }
 
 /** Build one review tab's registered content from its loaded bootstrap. */
-function buildReviewTabInfo(
+export function buildReviewTabInfo(
   bootstrap: AppBootstrap,
   tab: { tabId: string; name: string; cwd: string },
 ): HunkReviewTabInfo {
@@ -75,7 +75,10 @@ function buildReviewTabInfo(
 }
 
 /** Build one tab's initial selection and comment state. */
-function buildInitialReviewTabState(bootstrap: AppBootstrap, tabId: string): HunkReviewTabState {
+export function buildInitialReviewTabState(
+  bootstrap: AppBootstrap,
+  tabId: string,
+): HunkReviewTabState {
   const firstFile = bootstrap.changeset.files[0];
   const firstHunk = firstFile?.metadata.hunks[0];
   const firstRange = firstHunk ? hunkLineRange(firstHunk) : null;
@@ -120,9 +123,10 @@ export function createSessionRegistration(bootstrap: AppBootstrap): HunkSessionR
 export function updateSessionRegistration(
   current: HunkSessionRegistration,
   bootstrap: AppBootstrap,
+  tabId = current.info.activeTabId,
 ): HunkSessionRegistration {
-  const active = current.info.tabs.find((tab) => tab.tabId === current.info.activeTabId);
-  if (!active) throw new Error(`Active review tab is missing: ${current.info.activeTabId}`);
+  const currentTab = current.info.tabs.find((tab) => tab.tabId === tabId);
+  if (!currentTab) throw new Error(`Review tab is missing: ${tabId}`);
 
   return {
     ...current,
@@ -130,7 +134,7 @@ export function updateSessionRegistration(
     info: {
       ...current.info,
       tabs: current.info.tabs.map((tab) =>
-        tab.tabId === active.tabId
+        tab.tabId === currentTab.tabId
           ? buildReviewTabInfo(bootstrap, {
               tabId: tab.tabId,
               name: tab.name,

@@ -57,6 +57,29 @@ export const sessionDaemonRequestSchema = z.discriminatedUnion("action", [
     sourcePath: z.string().optional(),
   }),
   z.strictObject({
+    action: z.literal("tab-add"),
+    selector: selectorSchema,
+    name: z.string(),
+    sourcePath: z.string(),
+    input: cliInputSchema,
+  }),
+  z.strictObject({
+    action: z.literal("tab-select"),
+    selector: selectorSchema,
+    tab: z.string(),
+  }),
+  z.strictObject({
+    action: z.literal("tab-rename"),
+    selector: selectorSchema,
+    tab: z.string(),
+    name: z.string(),
+  }),
+  z.strictObject({
+    action: z.literal("tab-close"),
+    selector: selectorSchema,
+    tab: z.string(),
+  }),
+  z.strictObject({
     action: z.literal("comment-add"),
     selector: selectorSchema,
     filePath: z.string(),

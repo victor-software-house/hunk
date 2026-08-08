@@ -1,4 +1,5 @@
 import { dirname } from "node:path";
+import { resolveCanonicalPath } from "../core/paths";
 
 /**
  * Host-owned modules served to dynamically imported extension files.
@@ -198,6 +199,14 @@ export function registerHostRuntimeModules(entryPaths: readonly string[]) {
 
   registerVirtualModules();
   for (const path of entryPaths) {
-    registerSourceRoot(dirname(path));
+    const sourceRoot = dirname(path);
+    registerSourceRoot(sourceRoot);
+    // Bun may report either the imported spelling or its canonical path to
+    // `onLoad`; register both so symlink and macOS `/var` aliases cannot bypass
+    // the host-React rewrite.
+    const canonicalRoot = dirname(resolveCanonicalPath(path));
+    if (canonicalRoot !== sourceRoot) {
+      registerSourceRoot(canonicalRoot);
+    }
   }
 }
