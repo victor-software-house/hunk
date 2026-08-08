@@ -74,6 +74,11 @@ export function createHunkSessionBridge(handlers: HunkSessionBridgeHandlers) {
             resetApp: false,
             sourcePath: message.input.sourcePath,
           });
+        case "add_review_tab":
+        case "select_review_tab":
+        case "rename_review_tab":
+        case "close_review_tab":
+          throw new Error("Review tab commands must be handled by the app host.");
         case "remove_comment":
           return handlers.removeLiveComment(message.input.commentId);
         case "clear_comments":
@@ -84,3 +89,5 @@ export function createHunkSessionBridge(handlers: HunkSessionBridgeHandlers) {
     },
   };
 }
+
+export type HunkSessionAppBridge = ReturnType<typeof createHunkSessionBridge>;

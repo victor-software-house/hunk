@@ -25,6 +25,9 @@ interface TestSessionState {
 
 interface TestListedSession extends SessionBrokerListedSession {
   pid: number;
+  cwd: string;
+  repoRoot?: string;
+  title: string;
   launchedAt: string;
   fileCount: number;
   snapshot: SessionSnapshot<TestSessionState>;
@@ -106,6 +109,13 @@ const testBrokerView: SessionBrokerViewAdapter<
 > = {
   parseRegistration: (value) => parseSessionRegistrationEnvelope(value, parseTestInfo),
   parseSnapshot: (value) => parseSessionSnapshotEnvelope(value, parseTestState),
+  matchesSession: (session, selector) =>
+    selector.sessionPath
+      ? session.cwd === selector.sessionPath
+      : selector.repoRoot
+        ? session.repoRoot === selector.repoRoot
+        : session.sessionId === selector.sessionId,
+  describeSession: (session) => `${session.sessionId} (${session.title})`,
   buildListedSession: (entry) => ({
     sessionId: entry.registration.sessionId,
     pid: entry.registration.pid,
@@ -128,6 +138,13 @@ const testBrokerView: SessionBrokerViewAdapter<
   }),
   listComments: (_session, filter) => [{ id: "note-1", filePath: filter.filePath }],
 };
+
+function resolveTestSessionTarget(
+  sessions: TestListedSession[],
+  selector: Parameters<typeof resolveSessionTarget<TestListedSession>>[1],
+) {
+  return resolveSessionTarget(sessions, selector, testBrokerView);
+}
 
 function createState() {
   return new SessionBrokerState<
@@ -206,14 +223,14 @@ describe("session broker state", () => {
       }),
     ];
 
-    expect(resolveSessionTarget(one, {}).sessionId).toBe("session-1");
-    expect(resolveSessionTarget(one, { sessionPath: "/repo" }).sessionId).toBe("session-1");
-    expect(resolveSessionTarget(one, { repoRoot: "/repo" }).sessionId).toBe("session-1");
-    expect(resolveSessionTarget(two, { sessionId: "session-2" }).sessionId).toBe("session-2");
-    expect(() => resolveSessionTarget(two, {})).toThrow(
+    expect(resolveTestSessionTarget(one, {}).sessionId).toBe("session-1");
+    expect(resolveTestSessionTarget(one, { sessionPath: "/repo" }).sessionId).toBe("session-1");
+    expect(resolveTestSessionTarget(one, { repoRoot: "/repo" }).sessionId).toBe("session-1");
+    expect(resolveTestSessionTarget(two, { sessionId: "session-2" }).sessionId).toBe("session-2");
+    expect(() => resolveTestSessionTarget(two, {})).toThrow(
       "specify sessionId, sessionPath, or repoRoot",
     );
-    expect(() => resolveSessionTarget(two, { repoRoot: "/repo" })).toThrow(
+    expect(() => resolveTestSessionTarget(two, { repoRoot: "/repo" })).toThrow(
       "specify sessionId instead",
     );
   });
@@ -232,10 +249,12 @@ describe("session broker state", () => {
       }),
     ];
 
-    expect(resolveSessionTarget(sessions, { sessionPath: "/live-session" }).sessionId).toBe(
+    expect(resolveTestSessionTarget(sessions, { sessionPath: "/live-session" }).sessionId).toBe(
       "session-f",
     );
-    expect(resolveSessionTarget(sessions, { repoRoot: "/source-a" }).sessionId).toBe("session-a");
+    expect(resolveTestSessionTarget(sessions, { repoRoot: "/source-a" }).sessionId).toBe(
+      "session-a",
+    );
   });
 
   test("delegates session projections to the app adapter", () => {

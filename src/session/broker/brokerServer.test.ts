@@ -300,6 +300,10 @@ describe("Hunk session daemon server", () => {
           "review",
           "navigate",
           "reload",
+          "tab-add",
+          "tab-select",
+          "tab-rename",
+          "tab-close",
           "comment-add",
           "comment-apply",
           "comment-list",
@@ -797,6 +801,68 @@ describe("Hunk session daemon server", () => {
       });
     } finally {
       socket.close();
+      server.stop(true);
+    }
+  });
+
+  test("forwards tab management through the process host bridge", async () => {
+    const port = await reserveLoopbackPort();
+    process.env.HUNK_MCP_HOST = "127.0.0.1";
+    process.env.HUNK_MCP_PORT = String(port);
+    const calls: Array<{ command: string; input: unknown }> = [];
+    const original = SessionBrokerState.prototype.dispatchCommand;
+    SessionBrokerState.prototype.dispatchCommand = (({ command, input }: any) => {
+      calls.push({ command, input });
+      return Promise.resolve({ sessionId: "session-1", activeTabId: "tab-2", tab: {} });
+    }) as SessionBrokerState["dispatchCommand"];
+    const server = serveSessionBrokerDaemon();
+
+    try {
+      const requests = [
+        {
+          action: "tab-add",
+          selector: { sessionId: "session-1" },
+          name: "api",
+          sourcePath: "/api",
+          input: { kind: "vcs", range: "main...feature", staged: false, options: {} },
+        },
+        { action: "tab-select", selector: { sessionId: "session-1" }, tab: "api" },
+        {
+          action: "tab-rename",
+          selector: { sessionId: "session-1" },
+          tab: "api",
+          name: "backend",
+        },
+        { action: "tab-close", selector: { sessionId: "session-1" }, tab: "backend" },
+      ];
+      for (const request of requests) {
+        const response = await fetch(`http://127.0.0.1:${port}/session-api`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(request),
+        });
+        expect(response.status).toBe(200);
+      }
+
+      expect(calls).toEqual([
+        {
+          command: "add_review_tab",
+          input: {
+            sessionId: "session-1",
+            name: "api",
+            sourcePath: "/api",
+            input: { kind: "vcs", range: "main...feature", staged: false, options: {} },
+          },
+        },
+        { command: "select_review_tab", input: { sessionId: "session-1", tab: "api" } },
+        {
+          command: "rename_review_tab",
+          input: { sessionId: "session-1", tab: "api", name: "backend" },
+        },
+        { command: "close_review_tab", input: { sessionId: "session-1", tab: "backend" } },
+      ]);
+    } finally {
+      SessionBrokerState.prototype.dispatchCommand = original;
       server.stop(true);
     }
   });

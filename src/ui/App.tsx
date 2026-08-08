@@ -5,7 +5,17 @@ import {
 } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/react";
 import { writeFile } from "node:fs/promises";
-import { Fragment, Suspense, lazy, useCallback, useEffect, useMemo, useState, useRef } from "react";
+import {
+  Fragment,
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+  type ReactNode,
+} from "react";
 import {
   diffPersistedViewPreferences,
   saveGlobalViewPreferences,
@@ -68,7 +78,7 @@ import type { ActiveAddNoteAffordance } from "./diff/PierreDiffView";
 import { useAppKeyboardShortcuts } from "./hooks/useAppKeyboardShortcuts";
 import { useExtensionDialogController } from "./hooks/useExtensionDialogController";
 import { useExtensionNotifications } from "./hooks/useExtensionNotifications";
-import { useHunkSessionBridge } from "./hooks/useHunkSessionBridge";
+import { useHunkSessionBridge, type HunkSessionBinding } from "./hooks/useHunkSessionBridge";
 import { useMenuController } from "./hooks/useMenuController";
 import { useReviewController, type AgentNoteGeometrySnapshot } from "./hooks/useReviewController";
 import { useWatchedInput, type WatchedInputRuntime } from "./hooks/useWatchedInput";
@@ -113,6 +123,7 @@ import { openSelectedFileInEditor } from "./lib/openInEditor";
 import { resolveResponsiveLayout } from "./lib/responsive";
 import { resizeSidebarWidth } from "./lib/sidebar";
 import { availableThemes, resolveTheme, withTransparentSurfaces } from "./themes";
+import type { AppTheme } from "./themes/types";
 
 type FocusArea = "files" | "filter" | "note";
 type ActiveAddNoteTarget = ActiveAddNoteAffordance & { fileId: string };
@@ -181,22 +192,36 @@ function withCurrentViewOptions(
 
 /** Orchestrate global app state, layout, navigation, and pane coordination. */
 export function App({
+  active = true,
   bootstrap,
   hostClient,
   noticeText,
   onQuit = () => process.exit(0),
+  onOpenNewReviewTab,
   onReloadSession,
+  sharedViewPreferences,
+  onSharedViewPreferencesChange,
+  onActiveThemeChange,
+  reviewTabs,
   watchRuntime,
+  sessionBinding,
 }: {
+  active?: boolean;
   bootstrap: AppBootstrap;
   hostClient?: HunkSessionBrokerClient;
   noticeText?: string | null;
   onQuit?: () => void;
+  onOpenNewReviewTab?: () => void;
   onReloadSession: (
     nextInput: CliInput,
     options?: ReloadSessionOptions,
   ) => Promise<ReloadedSessionResult>;
+  sharedViewPreferences?: PersistedViewPreferences;
+  onSharedViewPreferencesChange?: (preferences: PersistedViewPreferences) => void;
+  onActiveThemeChange?: (theme: AppTheme) => void;
+  reviewTabs?: ReactNode;
   watchRuntime?: WatchedInputRuntime;
+  sessionBinding?: HunkSessionBinding;
 }) {
   const SIDEBAR_MIN_WIDTH = 22;
   const SIDEBAR_DEFAULT_WIDTH = 34;
@@ -220,25 +245,41 @@ export function App({
   const cancelCopySelectionRef = useRef<(() => void) | null>(null);
   const [layoutToggleRequestId, setLayoutToggleRequestId] = useState(0);
   const [transientNoticeText, setTransientNoticeText] = useState<string | null>(null);
-  const [layoutMode, setLayoutMode] = useState<LayoutMode>(bootstrap.initialMode);
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>(
+    sharedViewPreferences?.mode ?? bootstrap.initialMode,
+  );
   const [themeId, setThemeId] = useState(
     () =>
       resolveTheme(
-        bootstrap.initialTheme,
+        sharedViewPreferences?.theme ?? bootstrap.initialTheme,
         bootstrap.initialThemeMode ?? renderer.themeMode,
         bootstrap.customThemes,
       ).id,
   );
   // Soft reloads replace bootstrap without re-running startup terminal theme detection.
   const [detectedThemeMode] = useState(() => bootstrap.initialThemeMode);
-  const [showAgentNotes, setShowAgentNotes] = useState(bootstrap.initialShowAgentNotes ?? false);
-  const [showLineNumbers, setShowLineNumbers] = useState(bootstrap.initialShowLineNumbers ?? true);
-  const [wrapLines, setWrapLines] = useState(bootstrap.initialWrapLines ?? false);
-  const [copyDecorations, setCopyDecorations] = useState(bootstrap.initialCopyDecorations ?? false);
+  const [showAgentNotes, setShowAgentNotes] = useState(
+    sharedViewPreferences?.showAgentNotes ?? bootstrap.initialShowAgentNotes ?? false,
+  );
+  const [showLineNumbers, setShowLineNumbers] = useState(
+    sharedViewPreferences?.showLineNumbers ?? bootstrap.initialShowLineNumbers ?? true,
+  );
+  const [wrapLines, setWrapLines] = useState(
+    sharedViewPreferences?.wrapLines ?? bootstrap.initialWrapLines ?? false,
+  );
+  const [copyDecorations, setCopyDecorations] = useState(
+    sharedViewPreferences?.copyDecorations ?? bootstrap.initialCopyDecorations ?? false,
+  );
   const [codeHorizontalOffset, setCodeHorizontalOffset] = useState(0);
-  const [cursorLine, setCursorLine] = useState<CursorLine>(bootstrap.initialCursorLine ?? "row");
-  const [showHunkHeaders, setShowHunkHeaders] = useState(bootstrap.initialShowHunkHeaders ?? true);
-  const [showMenuBar, setShowMenuBar] = useState(bootstrap.initialShowMenuBar ?? true);
+  const [cursorLine, setCursorLine] = useState<CursorLine>(
+    sharedViewPreferences?.cursorLine ?? bootstrap.initialCursorLine ?? "row",
+  );
+  const [showHunkHeaders, setShowHunkHeaders] = useState(
+    sharedViewPreferences?.showHunkHeaders ?? bootstrap.initialShowHunkHeaders ?? true,
+  );
+  const [showMenuBar, setShowMenuBar] = useState(
+    sharedViewPreferences?.showMenuBar ?? bootstrap.initialShowMenuBar ?? true,
+  );
   const [themeSelectorState, setThemeSelectorState] = useState<ThemeSelectorState>({
     open: false,
     selectedIndex: 0,
@@ -287,6 +328,23 @@ export function App({
         : baseTheme,
     [baseTheme, bootstrap.input.options.transparentBackground],
   );
+
+  useEffect(() => {
+    if (!sharedViewPreferences) return;
+    setLayoutMode(sharedViewPreferences.mode);
+    if (sharedViewPreferences.theme) setThemeId(sharedViewPreferences.theme);
+    setShowLineNumbers(sharedViewPreferences.showLineNumbers);
+    setWrapLines(sharedViewPreferences.wrapLines);
+    setShowHunkHeaders(sharedViewPreferences.showHunkHeaders);
+    setShowMenuBar(sharedViewPreferences.showMenuBar);
+    setShowAgentNotes(sharedViewPreferences.showAgentNotes);
+    setCopyDecorations(sharedViewPreferences.copyDecorations);
+    setCursorLine(sharedViewPreferences.cursorLine);
+  }, [sharedViewPreferences]);
+
+  useEffect(() => {
+    if (active) onActiveThemeChange?.(activeTheme);
+  }, [active, activeTheme, onActiveThemeChange]);
 
   const themeSelectorItems = useMemo(
     () =>
@@ -340,6 +398,10 @@ export function App({
     ]);
   }, [changedViewPreferences]);
   const hasUnsavedViewPreferences = changedViewPreferences.length > 0;
+
+  useEffect(() => {
+    if (active) onSharedViewPreferencesChange?.(currentViewPreferences);
+  }, [active, currentViewPreferences, onSharedViewPreferencesChange]);
   const viewPreferencesConfigLabel = useMemo(() => {
     const path = bootstrap.viewPreferencesConfigPath ?? "~/.config/hunk/config.toml";
     return process.env.HOME && path.startsWith(process.env.HOME)
@@ -1086,6 +1148,7 @@ export function App({
     selectedHunk: review.selectedHunk,
     selectedHunkIndex,
     showAgentNotes,
+    sessionBinding,
   });
   const maxVisibleLineNumber = useMemo(
     () =>
@@ -1888,6 +1951,7 @@ export function App({
   } = useMenuController(menus);
 
   useAppKeyboardShortcuts({
+    enabled: active,
     activeMenuId,
     activateCurrentMenuItem,
     closeAgentSkill,
@@ -1912,6 +1976,7 @@ export function App({
     moveMenuItem,
     moveThemeSelector,
     openMenu,
+    openNewReviewTab: onOpenNewReviewTab,
     saveConfigPromptOpen,
     saveViewPreferencesAndQuit,
     discardViewPreferencesAndQuit,
@@ -1994,7 +2059,12 @@ export function App({
   // plus its divider. Keep this in lockstep with the body container's
   // paddingLeft and the sidebar render branch below.
   const diffPaneScreenLeft = bodyPadding / 2 + sidebarLayout.leftWidth;
-  const diffPaneScreenTop = showMenuBar ? 1 : 0;
+  // Pager mode hides all app chrome until its menu is explicitly revealed.
+  const visibleReviewTabs = showMenuBar ? reviewTabs : null;
+  const diffPaneScreenTop = (showMenuBar ? 1 : 0) + (visibleReviewTabs ? 1 : 0);
+  // The tab strip occupies the pane separator's old row. Keeping both would
+  // spend two extra rows and shift every review/mouse coordinate unnecessarily.
+  const showPaneTopChrome = showMenuBar && !visibleReviewTabs;
 
   /** Render one open sidebar view at its planned width. */
   const renderSidebarPane = (pane: SidebarPanePlan) => {
@@ -2008,7 +2078,7 @@ export function App({
         fileViews={getExtensionFileViews()}
         selectedFileId={paneSelection.file?.id ?? null}
         selectedHunkIndex={paneSelection.hunkIndex}
-        showTopChrome={showMenuBar}
+        showTopChrome={showPaneTopChrome}
         theme={activeTheme}
         width={pane.width}
         keybindings={sidebarKeybindings}
@@ -2057,6 +2127,7 @@ export function App({
           onToggleMenu={toggleMenu}
         />
       ) : null}
+      {visibleReviewTabs}
 
       <box
         style={{
@@ -2110,6 +2181,7 @@ export function App({
         })}
 
         <DiffPane
+          active={active}
           cancelCopySelectionRef={cancelCopySelectionRef}
           codeHorizontalOffset={codeHorizontalOffset}
           copyDecorations={copyDecorations}
@@ -2120,7 +2192,7 @@ export function App({
           pagerMode={pagerMode}
           screenLeft={diffPaneScreenLeft}
           screenTop={diffPaneScreenTop}
-          showTopChrome={showMenuBar}
+          showTopChrome={showPaneTopChrome}
           headerLabelWidth={diffHeaderLabelWidth}
           headerStatsWidth={diffHeaderStatsWidth}
           layout={resolvedLayout}
