@@ -2073,6 +2073,7 @@ export function App({
     const paneSelection = getExtensionSelection();
     return (
       <ExtensionSidebarPane
+        active={active}
         registered={pane.view.registered}
         files={filteredFiles}
         fileViews={getExtensionFileViews()}
