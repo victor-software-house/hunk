@@ -42,6 +42,9 @@ export interface StagePrebuiltArtifactOptions {
 export function stagePrebuiltArtifact(options: StagePrebuiltArtifactOptions = {}) {
   const repoRoot = path.resolve(options.repoRoot ?? path.resolve(import.meta.dir, ".."));
   const spec = getHostPlatformPackageSpec();
+  if (!spec.enabled) {
+    throw new Error(`Prebuilt releases are disabled for ${spec.os}/${spec.cpu}.`);
+  }
   const binaryName = binaryFilenameForSpec(spec);
   const compiledBinaryCandidates = [
     path.join(repoRoot, "dist", binaryName),
@@ -49,7 +52,7 @@ export function stagePrebuiltArtifact(options: StagePrebuiltArtifactOptions = {}
   ];
   const compiledBinary = compiledBinaryCandidates.find((candidate) => existsSync(candidate));
   const outputRoot = path.resolve(options.outputRoot ?? releaseArtifactsDir(repoRoot));
-  const outputDir = path.join(outputRoot, spec.packageName);
+  const outputDir = path.join(outputRoot, spec.artifactName);
 
   if (options.expectedPackage && options.expectedPackage !== spec.packageName) {
     throw new Error(

@@ -133,7 +133,7 @@ export async function loadExtensions(options: LoadExtensionsOptions): Promise<Ex
   // Ids are settled before anything is imported, so a refused candidate never
   // gets a loader hook, let alone an evaluated module.
   const { accepted, issues } = acceptCandidateIds(options.candidates);
-  // Before any candidate is imported, so its `react` (and `hunkdiff/extension`)
+  // Before any candidate is imported, so its `react` (and `@victor-software-house/hunk/extension`)
   // imports resolve to the host's own instances rather than the filesystem.
   registerHostRuntimeModules(accepted.map((candidate) => candidate.path));
   const registry = createEmptyExtensionRegistry();

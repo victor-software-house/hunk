@@ -42,13 +42,17 @@ describe("buildDocExamples", () => {
   }
 
   test("treats an importing block as a whole module and adds no imports of its own", () => {
-    const example = buildOne('import type { HunkExtensionAPI } from "hunkdiff/extension";');
+    const example = buildOne(
+      'import type { HunkExtensionAPI } from "@victor-software-house/hunk/extension";',
+    );
 
     expect(example.wrapper).toBe("module");
     // The preamble's own imports are aliased, so they cannot collide with the
     // example's — that collision is what made the first harness run fail.
     expect(example.text).toContain("as __HunkApi");
-    expect(example.text).toContain('import type { HunkExtensionAPI } from "hunkdiff/extension";');
+    expect(example.text).toContain(
+      'import type { HunkExtensionAPI } from "@victor-software-house/hunk/extension";',
+    );
   });
 
   test("wraps a bare API call in a factory body", () => {

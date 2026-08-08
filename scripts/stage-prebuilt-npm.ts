@@ -79,7 +79,7 @@ function stageMetaPackage(
   releaseRoot: string,
   specs: readonly PlatformPackageSpec[],
 ) {
-  const metaDir = path.join(releaseRoot, rootPackage.name);
+  const metaDir = path.join(releaseRoot, "hunk");
   ensureDirectory(path.join(metaDir, "bin"));
   cpSync(path.join(repoRoot, "bin", "hunk.cjs"), path.join(metaDir, "bin", "hunk.cjs"));
   cpSync(path.join(repoRoot, "dist", "npm"), path.join(metaDir, "dist", "npm"), {
@@ -110,7 +110,8 @@ function stageMetaPackage(
     optionalDependencies: buildOptionalDependencyMap(rootPackage.version, specs),
     license: rootPackage.license,
     publishConfig: {
-      access: "public",
+      registry: "https://npm.pkg.github.com",
+      access: "restricted",
     },
   });
 }
@@ -126,7 +127,7 @@ function stagePlatformPackage(
     throw new Error(`Missing compiled binary at ${compiledBinary}`);
   }
 
-  const packageDir = path.join(releaseRoot, spec.packageName);
+  const packageDir = path.join(releaseRoot, spec.artifactName);
   const binaryName = binaryFilenameForSpec(spec);
 
   ensureDirectory(path.join(packageDir, "bin"));
@@ -189,10 +190,10 @@ for (const artifact of artifacts) {
   stagePlatformPackage(rootPackage, releaseRoot, repoRoot, artifact.spec, artifact.compiledBinary);
 }
 
-console.log(`Staged prebuilt npm packages in ${releaseRoot}`);
-console.log(`- ${path.join(releaseRoot, rootPackage.name)}`);
+console.log(`Staged prebuilt GitHub Packages in ${releaseRoot}`);
+console.log(`- ${path.join(releaseRoot, "hunk")}`);
 for (const spec of stagedSpecs) {
-  console.log(`- ${path.join(releaseRoot, spec.packageName)}`);
+  console.log(`- ${path.join(releaseRoot, spec.artifactName)}`);
 }
 if (artifactRoot) {
   console.log(`Artifacts source: ${artifactRoot}`);
