@@ -55,18 +55,12 @@ function hostCandidates() {
   const arch = archMap[os.arch()] || os.arch();
   const binary = platform === "windows" ? "hunk.exe" : "hunk";
 
-  if (platform === "darwin") {
-    if (arch === "arm64") return [{ packageName: "hunkdiff-darwin-arm64", binary }];
-    if (arch === "x64") return [{ packageName: "hunkdiff-darwin-x64", binary }];
+  if (platform === "darwin" && arch === "arm64") {
+    return [{ packageName: "@victor-software-house/hunk-darwin-arm64", binary }];
   }
 
-  if (platform === "linux") {
-    if (arch === "arm64") return [{ packageName: "hunkdiff-linux-arm64", binary }];
-    if (arch === "x64") return [{ packageName: "hunkdiff-linux-x64", binary }];
-  }
-
-  if (platform === "windows") {
-    if (arch === "x64") return [{ packageName: "hunkdiff-windows-x64", binary }];
+  if (platform === "linux" && arch === "x64") {
+    return [{ packageName: "@victor-software-house/hunk-linux-x64", binary }];
   }
 
   return [];
@@ -136,7 +130,7 @@ const printablePackages = hostCandidates()
   .join(" or ");
 console.error(
   printablePackages.length > 0
-    ? `Failed to locate a matching prebuilt Hunk binary. Try reinstalling hunkdiff or manually installing ${printablePackages}.`
+    ? `Failed to locate a matching prebuilt Hunk binary. Try reinstalling @victor-software-house/hunk or manually installing ${printablePackages}.`
     : `Unsupported platform for prebuilt Hunk binaries: ${os.platform()} ${os.arch()}`,
 );
 process.exit(1);

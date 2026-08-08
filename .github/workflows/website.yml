@@ -1,8 +1,5 @@
 name: Website
 
-env:
-  SKIP_INSTALL_SIMPLE_GIT_HOOKS: "1"
-
 on:
   pull_request:
   push:

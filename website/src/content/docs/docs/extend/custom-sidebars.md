@@ -8,7 +8,10 @@ description: Render your own React sidebar view inside Hunk, with selection, scr
 ```tsx
 // ~/.config/hunk/extensions/flat-sidebar.tsx
 import { useMemo } from "react";
-import type { ExtensionSidebarViewProps, HunkExtensionAPI } from "hunkdiff/extension";
+import type {
+  ExtensionSidebarViewProps,
+  HunkExtensionAPI,
+} from "@victor-software-house/hunk/extension";
 
 function FlatSidebar({ files, selectedFileId, theme, actions }: ExtensionSidebarViewProps) {
   const ordered = useMemo(() => [...files].sort((a, b) => a.path.localeCompare(b.path)), [files]);
@@ -73,7 +76,10 @@ The three hunk surfaces line up by design: each file's `hunks` lists public `Ext
 A component that owns a key event should ask the injected `keybindings` manager about a **command id**, rather than hard-coding the command's default chord. This keeps local component behavior synchronized with the user's remaps and unbindings:
 
 ```ts
-import type { ExtensionKeyEvent, ExtensionSidebarViewProps } from "hunkdiff/extension";
+import type {
+  ExtensionKeyEvent,
+  ExtensionSidebarViewProps,
+} from "@victor-software-house/hunk/extension";
 
 export function handleSidebarKey(props: ExtensionSidebarViewProps, key: ExtensionKeyEvent) {
   const nextFile = props.files[1];
@@ -101,7 +107,7 @@ The one behavior a list sidebar always ends up needing is following the selectio
 ```tsx
 import { useEffect, useRef } from "react";
 import type { ScrollBoxRenderable } from "@opentui/core";
-import type { ExtensionSidebarViewProps } from "hunkdiff/extension";
+import type { ExtensionSidebarViewProps } from "@victor-software-house/hunk/extension";
 
 function HunkList({
   files,
@@ -153,7 +159,7 @@ The ref surface this recipe stands on is the exact one the built-in sidebar runs
 
 That is enough to window a long list yourself: the built-in sidebar renders only the rows near the viewport, plus spacer boxes sized from those same reads (its render-window helper is host code, but nothing it computes needs anything beyond this surface — `useTerminalDimensions` from `@opentui/react` serves as its pre-first-layout viewport estimate).
 
-One honest caveat: this contract rides on OpenTUI's renderable API, served at whatever version Hunk pins — a wider surface than `hunkdiff/extension` itself. The built-in sidebar exercising the exact same calls is the compatibility guarantee: a change that breaks your scroll code breaks Hunk's own sidebar first. Still, keep scroll handling small and behind your own helpers.
+One honest caveat: this contract rides on OpenTUI's renderable API, served at whatever version Hunk pins — a wider surface than `@victor-software-house/hunk/extension` itself. The built-in sidebar exercising the exact same calls is the compatibility guarantee: a change that breaks your scroll code breaks Hunk's own sidebar first. Still, keep scroll handling small and behind your own helpers.
 
 The built-in sidebar is itself a bundled extension (`src/extensions/default/ui/sidebar/` in the Hunk repository): it registers through this exact call, its component consumes exactly the props documented above, and its windowing and selection follow run on exactly the ref contract above — so it doubles as the reference implementation for everything a third-party sidebar can build, from grouping and stat badges down to scroll behavior.
 
@@ -163,7 +169,7 @@ Lifecycle handlers run outside React, but a sidebar component only rerenders whe
 
 ```tsx
 import { useSyncExternalStore } from "react";
-import type { HunkExtensionAPI } from "hunkdiff/extension";
+import type { HunkExtensionAPI } from "@victor-software-house/hunk/extension";
 
 let viewedPaths: ReadonlySet<string> = new Set();
 const listeners = new Set<() => void>();

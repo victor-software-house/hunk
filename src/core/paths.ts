@@ -111,6 +111,9 @@ export function resolveBundledHunkReviewSkillPath(searchRoots?: string[]) {
   const roots = searchRoots ?? [import.meta.dir, process.execPath];
   const relativeCandidates = [
     HUNK_REVIEW_SKILL_RELATIVE_PATH,
+    join("@victor-software-house", "hunk", HUNK_REVIEW_SKILL_RELATIVE_PATH),
+    join("node_modules", "@victor-software-house", "hunk", HUNK_REVIEW_SKILL_RELATIVE_PATH),
+    // Preserve skill lookup for upstream package layouts during migration.
     join("hunkdiff", HUNK_REVIEW_SKILL_RELATIVE_PATH),
     join("node_modules", "hunkdiff", HUNK_REVIEW_SKILL_RELATIVE_PATH),
   ];
