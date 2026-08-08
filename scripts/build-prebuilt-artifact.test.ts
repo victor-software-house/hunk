@@ -52,7 +52,7 @@ describe("stagePrebuiltArtifact", () => {
 
     const outputDir = stagePrebuiltArtifact({ repoRoot, outputRoot });
 
-    expect(outputDir).toBe(path.join(outputRoot, spec.packageName));
+    expect(outputDir).toBe(path.join(outputRoot, spec.artifactName));
     expect(existsSync(path.join(outputDir, binaryName))).toBe(true);
     expect(existsSync(path.join(outputDir, "metadata.json"))).toBe(true);
     expect(existsSync(path.join(outputDir, "skills", "hunk-review", "SKILL.md"))).toBe(true);

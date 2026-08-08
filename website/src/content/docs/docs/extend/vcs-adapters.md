@@ -56,7 +56,7 @@ Higher is consulted first; equal priorities fall back to registration order. jj 
 The default puts your adapter below Git, so installing an extension never silently changes how an existing repository is reviewed. Set `detectionPriority` explicitly to outrank a shipped backend; it is your machine.
 
 ```ts
-import { HUNK_CORE_VCS_DETECTION_PRIORITY } from "hunkdiff/extension";
+import { HUNK_CORE_VCS_DETECTION_PRIORITY } from "@victor-software-house/hunk/extension";
 
 hunk.registerVcsAdapter({
   id: "hg",
@@ -165,7 +165,7 @@ extraFiles: [
 Throw a `HunkExtensionUserError` when the problem is how Hunk was invoked rather than a bug — no repository here, an unresolvable revision, a missing binary. Hunk prints the message without a stack trace and lists the suggestions beneath it. Anything else is reported as an unexpected error.
 
 ```ts
-import { HunkExtensionUserError } from "hunkdiff/extension";
+import { HunkExtensionUserError } from "@victor-software-house/hunk/extension";
 
 throw new HunkExtensionUserError("`hunk stash show` is not supported by Mercurial.", {
   suggestions: ["Use `hunk show <rev>` to review a commit instead."],
