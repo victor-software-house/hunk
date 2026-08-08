@@ -4,6 +4,7 @@ import {
   binaryFilenameForSpec,
   buildOptionalDependencyMap,
   buildPlatformPackageManifest,
+  buildPublishArgs,
   classifyPackageSetPublication,
   enabledPlatformPackageSpecs,
   getHostPlatformPackageSpec,
@@ -147,6 +148,33 @@ describe("prebuilt package helpers", () => {
     expect(manifest).not.toHaveProperty("bin");
     expect(manifest.os).toEqual(["win32"]);
     expect(manifest.cpu).toEqual(["x64"]);
+  });
+
+  test("buildPublishArgs carries the repository auth config into staged package directories", () => {
+    expect(
+      buildPublishArgs({
+        bunConfigPath: "/repo/bunfig.toml",
+        dryRun: true,
+        npmTag: "beta",
+      }),
+    ).toEqual([
+      "--config",
+      "/repo/bunfig.toml",
+      "publish",
+      "--tolerate-republish",
+      "--access",
+      "restricted",
+      "--tag",
+      "beta",
+      "--dry-run",
+    ]);
+    expect(
+      buildPublishArgs({
+        bunConfigPath: "/repo/bunfig.toml",
+        dryRun: false,
+        npmTag: "latest",
+      }),
+    ).not.toContain("--dry-run");
   });
 
   test("classifyPackageSetPublication rejects partial releases", () => {

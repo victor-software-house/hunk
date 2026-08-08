@@ -2,7 +2,11 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { classifyPackageSetPublication, releaseNpmDir } from "./prebuilt-package-helpers";
+import {
+  buildPublishArgs,
+  classifyPackageSetPublication,
+  releaseNpmDir,
+} from "./prebuilt-package-helpers";
 
 type PackageJson = {
   name: string;
@@ -51,16 +55,17 @@ function packageExists(name: string, version: string) {
   return proc.exitCode === 0;
 }
 
-function publishDirectory(directory: string, dryRun: boolean, npmTag: string) {
+function publishDirectory(
+  directory: string,
+  bunConfigPath: string,
+  dryRun: boolean,
+  npmTag: string,
+) {
   const packageJson = JSON.parse(
     readFileSync(path.join(directory, "package.json"), "utf8"),
   ) as PackageJson;
 
-  const args = ["publish", "--tolerate-republish", "--access", "restricted", "--tag", npmTag];
-  if (dryRun) {
-    args.push("--dry-run");
-  }
-
+  const args = buildPublishArgs({ bunConfigPath, dryRun, npmTag });
   const proc = Bun.spawnSync(["bun", ...args], {
     cwd: directory,
     stdin: "ignore",
@@ -75,6 +80,7 @@ function publishDirectory(directory: string, dryRun: boolean, npmTag: string) {
 }
 
 const repoRoot = path.resolve(import.meta.dir, "..");
+const bunConfigPath = path.join(repoRoot, "bunfig.toml");
 const releaseRoot = releaseNpmDir(repoRoot);
 const options = parseArgs(process.argv.slice(2));
 
@@ -117,7 +123,7 @@ if (publication === "all") {
   );
 } else {
   for (const { directory } of packages) {
-    publishDirectory(directory, options.dryRun, options.npmTag);
+    publishDirectory(directory, bunConfigPath, options.dryRun, options.npmTag);
   }
 }
 
