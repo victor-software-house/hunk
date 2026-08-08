@@ -1,5 +1,18 @@
 # hunk agent notes
 
+Read [`FORK.md`](FORK.md) and generated [`PATCHES.md`](PATCHES.md) before changing this downstream fork.
+
+## fork workflow
+
+- `origin` is the VSH publication authority; `upstream` is fetch-only and its push URL stays `DISABLED`.
+- Forkctl and StGit own every downstream change. Do not create ordinary commits above the upstream base, manually edit generated evidence, run plain Git rebase, or force-push `main`.
+- Start with `mise run fork status` and `mise run fork check`.
+- Create or select one explicit patch before editing; stage owned paths, run `mise run fork check -s`, then `mise run fork patch refresh` and `mise run fork patch finish`.
+- **Upstream baseline policy (operator, 2026-08-09): use only the latest stable upstream GitHub Release tag—never unreleased `upstream/main`.** Verify the release/tag commit before integration.
+- **Do not rebase or rewrite history for future upstream updates.** Merge the selected stable release into downstream `main`, resolve every conflict deliberately in favor of the documented downstream intent plus the upstream release behavior, then run all Forkctl and Hunk gates.
+- If Forkctl cannot model a merge-based update, stop and evolve or retire the Forkctl contract; do not fall back to a history rewrite merely to satisfy the current tool.
+- `vsh-distribution` owns VSH package/release policy. `fork-tooling` owns `FORK.md`, the manifest, generated ledger/exports, mounted task, and hook integration.
+
 ## purpose
 
 - Terminal-first diff viewer for understanding coding-agent changesets.

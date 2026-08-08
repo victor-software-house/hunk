@@ -1,0 +1,1119 @@
+review-range-api
+
+From: Victor Araújo <victor@victor-software-house.com>
+
+Downstream-Reason: Expose bounded review history and range replacement through the extension contract.
+Upstream-Status: not-submitted
+Drop-When: Upstream provides equivalent bounded history and review-range replacement APIs.
+---
+ .changeset/bright-review-ranges.md                 |    5 +
+ docs/extension-architecture.md                     |   15 ++
+ docs/extensions.md                                 |   45 +++++
+ src/core/vcs/types.ts                              |    3 
+ src/extension-api/index.ts                         |    7 +
+ src/extension-api/types.ts                         |   59 ++++++
+ src/extensions/default/vcs/git/history.test.ts     |   68 +++++++
+ src/extensions/default/vcs/git/history.ts          |  108 ++++++++++++
+ src/extensions/default/vcs/git/index.ts            |    2 
+ src/extensions/runExtension.ts                     |   10 +
+ src/extensions/types.ts                            |    7 +
+ src/ui/App.tsx                                     |  139 +++++++++++++++
+ src/ui/AppHost.extension-review.test.tsx           |  184 ++++++++++++++++++++
+ .../components/panes/ExtensionSidebarPane.test.tsx |    9 +
+ src/ui/components/panes/ExtensionSidebarPane.tsx   |    4 
+ src/ui/components/ui-components.test.tsx           |    5 +
+ src/ui/lib/extensionReview.test.ts                 |   53 ++++++
+ src/ui/lib/extensionReview.ts                      |   39 ++++
+ 18 files changed, 762 insertions(+)
+ create mode 100644 .changeset/bright-review-ranges.md
+ create mode 100644 src/extensions/default/vcs/git/history.test.ts
+ create mode 100644 src/extensions/default/vcs/git/history.ts
+ create mode 100644 src/ui/AppHost.extension-review.test.tsx
+ create mode 100644 src/ui/lib/extensionReview.test.ts
+ create mode 100644 src/ui/lib/extensionReview.ts
+
+diff --git a/.changeset/bright-review-ranges.md b/.changeset/bright-review-ranges.md
+new file mode 100644
+index 0000000..b5838f5
+--- /dev/null
++++ b/.changeset/bright-review-ranges.md
+@@ -0,0 +1,5 @@
++---
++"hunkdiff": minor
++---
++
++Let extensions inspect and replace the current VCS review range through Hunk's bounded reload path.
+diff --git a/docs/extension-architecture.md b/docs/extension-architecture.md
+index 95e20ad..bfa6057 100644
+--- a/docs/extension-architecture.md
++++ b/docs/extension-architecture.md
+@@ -151,6 +151,16 @@ resolve reviewed file ids through the existing source fetcher, which retains
+ ownership of caching and size limits. Missing or unreadable sources become
+ `null`.
+ 
++`src/ui/lib/extensionReview.ts` owns the narrow `ctx.review` range policy. It
++exposes only whether the current input can express a VCS range, normalizes one
++non-empty range, and replaces that field while preserving the VCS input's
++pathspecs and options. `App` supplies the live action through its existing soft
++reload path, so extensions never receive raw `CliInput` or an unbounded reload
++callback; `AppHost` still enforces launch authority, filesystem bounds, config
++normalization, daemon registration, and lifecycle events. The same controls are
++passed to command handlers and sidebar props so visual navigators and commands
++share one reload contract.
++
+ Writes are limited to reloadable working-tree reviews and reviewed paths inside
+ the review root. App supplies the current input, unfiltered changeset, and root
+ through refs so soft reloads update the policy inputs. The host verifies the
+@@ -182,6 +192,11 @@ none — which is why the visible menu list is derived from the menus record
+ 
+ ## VCS adapters
+ 
++Review history is an optional adapter capability beside review operations. The
++public rows contain only bounded commit/ref identity and presentation metadata;
++`src/extensions/default/vcs/git/history.ts` is the bundled reference. Hunk never
++silently runs Git history for a session owned by another backend.
++
+ `src/core/vcs/index.ts` is the single assembly point ordering bundled + user
+ adapters by `detectionPriority` (Git is the baseline at 0; jj 200 / sl 100
+ sit above it for colocated checkouts — the constants in
+diff --git a/docs/extensions.md b/docs/extensions.md
+index 4b7dad9..6621cde 100644
+--- a/docs/extensions.md
++++ b/docs/extensions.md
+@@ -268,6 +268,12 @@ optional, and each optional field buys one thing:
+ | `sourceCacheKey` | stable source-snapshot identity for highlight reuse across reloads |
+ | `extraFiles`     | files reviewed outside the patch, including skipped placeholders   |
+ 
++An adapter may also implement `loadHistory(context)` for review navigators. It
++returns bounded local commits plus branch, remote-branch, and tag refs; Hunk
++contains failures and exposes the result through `ctx.review.loadHistory()`.
++This capability is read-only and independent of the three review operations.
++The bundled Git adapter is the reference implementation.
++
+ `untrackedPaths` is the shorthand: list the repo-root-relative paths your VCS
+ reports as unknown and Hunk synthesizes the added-file diffs for you, skipping
+ binaries and files too large to render. Honor `input.options.excludeUntracked`
+@@ -1053,6 +1059,45 @@ hunk index is clamped into the file's real range.
+ A handler may be async; a failure (sync or rejected) becomes a warning naming
+ your extension.
+ 
++#### Review ranges
++
++`ctx.review` exposes the current VCS comparison range and can replace it through
++Hunk's own reload boundary:
++
++```ts
++hunk.registerCommand({ id: "compare-main", title: "Compare main to HEAD" }, async (ctx) => {
++  if (!ctx.review.range.available) {
++    ctx.notify(ctx.review.range.detail, "warning");
++    return;
++  }
++
++  const result = await ctx.review.setRange("main...HEAD");
++  if (!result.ok) ctx.notify(result.detail, "warning");
++});
++```
++
++`range` is a snapshot from when the command context or sidebar props were built.
++An available value is absent for a working-tree review and contains the current
++range for a range review. Non-VCS and non-reloadable sessions carry
++`available: false` with a displayable reason.
++
++`setRange(range)` trims and requires a non-empty range, then performs the same
++bounded soft reload as Hunk's refresh path while preserving the current layout,
++theme, notes, line numbers, menu, and wrapping choices. It keeps the current VCS
++backend and pathspecs, clears `--staged`, validates the reload against the
++session's original root, refreshes daemon state, and emits ordinary reload
++events. An unsupported session resolves `unavailable`; a VCS or reload failure
++resolves `failed`. Malformed arguments reject as extension bugs.
++
++Custom sidebar views receive the same capability as `props.review`, so a
++navigator can change ranges without shelling out or bypassing Hunk's session
++policy. `ctx.review.loadHistory()` (and the sidebar equivalent) resolves either
++`{ ok: true, history: { commits, refs } }` or an `unavailable` / `failed`
++result. Commit rows carry id, parents, subject, and ISO commit time; refs carry
++a selectable name, kind, target commit, and current-branch marker. An active
++backend that does not implement history reports `unavailable` rather than
++falling back to Git behind its back.
++
+ #### Asking the user
+ 
+ `ctx.dialogs` puts a question on screen and waits for the answer. Three shapes,
+diff --git a/src/core/vcs/types.ts b/src/core/vcs/types.ts
+index 1e4cf32..711319f 100644
+--- a/src/core/vcs/types.ts
++++ b/src/core/vcs/types.ts
+@@ -1,5 +1,6 @@
+ import type { BuildDiffFileOptions } from "../diffFile";
+ import type { WatchPlan } from "../watchPlan";
++import type { ExtensionReviewHistory } from "../../extension-api/types";
+ import type {
+   DiffFile,
+   VcsShowCommandInput,
+@@ -66,6 +67,8 @@ export interface VcsAdapter {
+   name: string;
+   detect(cwd: string): VcsDetection | null;
+   operations: VcsOperations;
++  /** Optional read-only local history for review navigators. */
++  loadHistory?: (context: VcsLoadContext) => Promise<ExtensionReviewHistory>;
+   /** Detection order weight; higher is consulted first. See the public contract. */
+   detectionPriority?: number;
+ }
+diff --git a/src/extension-api/index.ts b/src/extension-api/index.ts
+index e7ddea1..ec37e9d 100644
+--- a/src/extension-api/index.ts
++++ b/src/extension-api/index.ts
+@@ -66,6 +66,13 @@ export type {
+   ExtensionCommand,
+   ExtensionCommandContext,
+   ExtensionCommandHandler,
++  ExtensionReviewControls,
++  ExtensionReviewHistory,
++  ExtensionReviewHistoryCommit,
++  ExtensionReviewHistoryRef,
++  ExtensionReviewHistoryResult,
++  ExtensionReviewRangeResult,
++  ExtensionReviewRangeState,
+   ExtensionReviewSelection,
+   ExtensionConfirmOptions,
+   ExtensionDialogs,
+diff --git a/src/extension-api/types.ts b/src/extension-api/types.ts
+index e0bebe6..8f21dec 100644
+--- a/src/extension-api/types.ts
++++ b/src/extension-api/types.ts
+@@ -795,6 +795,8 @@ export interface ExtensionVcsAdapter {
+    * priorities fall back to registration order.
+    */
+   detectionPriority?: number;
++  /** Optional read-only history used by review navigators. */
++  loadHistory?(context: ExtensionVcsLoadContext): Promise<ExtensionReviewHistory>;
+ }
+ 
+ /* -------------------------------------------------------------------------- */
+@@ -908,6 +910,8 @@ export interface ExtensionSidebarViewProps {
+   theme: ExtensionSidebarTheme;
+   /** Resolved command bindings; use these instead of hard-coding sidebar chords. */
+   keybindings: ExtensionSidebarKeybindings;
++  /** Host-owned review-range state and replacement. */
++  review: ExtensionReviewControls;
+   actions: ExtensionSidebarActions;
+ }
+ 
+@@ -1118,6 +1122,59 @@ export interface ExtensionReviewSelection {
+   readonly hunkIndex: number | null;
+ }
+ 
++/** Whether this session can replace its current VCS comparison range. */
++export type ExtensionReviewRangeState =
++  | { available: true; value?: string }
++  | { available: false; detail: string };
++
++/** How one host-mediated review-range replacement settled. */
++export type ExtensionReviewRangeResult =
++  | { ok: true }
++  | { ok: false; reason: "unavailable" | "failed"; detail: string };
++
++/** One commit in the active VCS backend's bounded local history. */
++export interface ExtensionReviewHistoryCommit {
++  id: string;
++  parentIds: readonly string[];
++  subject: string;
++  committedAt: string;
++}
++
++/** One local branch, remote branch, or tag pointing into the returned history. */
++export interface ExtensionReviewHistoryRef {
++  name: string;
++  kind: "branch" | "remote" | "tag";
++  commitId: string;
++  current?: boolean;
++}
++
++/** Read-only history available to a review navigator. */
++export interface ExtensionReviewHistory {
++  commits: readonly ExtensionReviewHistoryCommit[];
++  refs: readonly ExtensionReviewHistoryRef[];
++}
++
++/** How an adapter-backed history request settled. */
++export type ExtensionReviewHistoryResult =
++  | { ok: true; history: ExtensionReviewHistory }
++  | { ok: false; reason: "unavailable" | "failed"; detail: string };
++
++/** Inspect and replace the current VCS comparison range through Hunk's reload boundary. */
++export interface ExtensionReviewControls {
++  /** Snapshot of the range state when these controls were created. */
++  readonly range: ExtensionReviewRangeState;
++  /**
++   * Replace the current review with one VCS range, preserving the active Hunk view.
++   *
++   * A blank or non-string range rejects as an extension bug. Unsupported review
++   * kinds resolve `unavailable`; a VCS or reload failure resolves `failed` with
++   * displayable detail.
++   */
++  setRange(range: string): Promise<ExtensionReviewRangeResult>;
++  /** Load bounded local history through the active VCS adapter. */
++  loadHistory(): Promise<ExtensionReviewHistoryResult>;
++}
++
+ /** One question put to the user as a modal confirm dialog. */
+ export interface ExtensionConfirmOptions {
+   title: string;
+@@ -1306,6 +1363,8 @@ export interface ExtensionWorkspace {
+ /** What a command handler receives when its key fires. */
+ export interface ExtensionCommandContext extends ExtensionContext {
+   sidebars: ExtensionSidebarControls;
++  /** Host-owned review-range state and replacement. */
++  readonly review: ExtensionReviewControls;
+   /** Host-owned selection controls for alternate file presentations. */
+   fileViews: ExtensionFileViewControls;
+   /**
+diff --git a/src/extensions/default/vcs/git/history.test.ts b/src/extensions/default/vcs/git/history.test.ts
+new file mode 100644
+index 0000000..c7e9974
+--- /dev/null
++++ b/src/extensions/default/vcs/git/history.test.ts
+@@ -0,0 +1,68 @@
++import { execFileSync } from "node:child_process";
++import { mkdtempSync, writeFileSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { afterEach, describe, expect, test } from "bun:test";
++import { removeTestDirectory } from "../../../../../test/helpers/filesystem";
++import { loadGitReviewHistory } from "./history";
++
++const tempDirs: string[] = [];
++
++afterEach(async () => {
++  for (const dir of tempDirs.splice(0)) {
++    await removeTestDirectory(dir);
++  }
++});
++
++function createHistoryRepo() {
++  const repo = mkdtempSync(join(tmpdir(), "hunk-git-history-"));
++  tempDirs.push(repo);
++  execFileSync("git", ["init", "-b", "main"], { cwd: repo, stdio: "ignore" });
++  execFileSync("git", ["config", "user.email", "test@test"], { cwd: repo });
++  execFileSync("git", ["config", "user.name", "test"], { cwd: repo });
++
++  const file = join(repo, "history.txt");
++  writeFileSync(file, "first\n");
++  execFileSync("git", ["add", "."], { cwd: repo });
++  execFileSync("git", ["commit", "-m", "first subject"], { cwd: repo, stdio: "ignore" });
++  execFileSync("git", ["tag", "v1"], { cwd: repo });
++
++  writeFileSync(file, "first\nsecond\n");
++  execFileSync("git", ["add", "."], { cwd: repo });
++  execFileSync("git", ["commit", "-m", "second subject"], { cwd: repo, stdio: "ignore" });
++  execFileSync("git", ["branch", "feature/history"], { cwd: repo });
++  execFileSync("git", ["remote", "add", "origin", repo], { cwd: repo });
++  execFileSync("git", ["update-ref", "refs/remotes/origin/main", "HEAD"], { cwd: repo });
++  execFileSync("git", ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"], {
++    cwd: repo,
++  });
++  return repo;
++}
++
++describe("Git review history", () => {
++  test("returns bounded commits and selectable branch, remote, and tag refs", async () => {
++    const repo = createHistoryRepo();
++    const history = await loadGitReviewHistory({ cwd: repo });
++
++    expect(history.commits.map((commit) => commit.subject)).toEqual([
++      "second subject",
++      "first subject",
++    ]);
++    const [head, base] = history.commits;
++    if (!head || !base) throw new Error("Expected two history commits.");
++    expect(head.parentIds).toEqual([base.id]);
++    expect(history.commits.every((commit) => !Number.isNaN(Date.parse(commit.committedAt)))).toBe(
++      true,
++    );
++
++    expect(history.refs).toEqual(
++      expect.arrayContaining([
++        expect.objectContaining({ name: "main", kind: "branch", current: true }),
++        expect.objectContaining({ name: "feature/history", kind: "branch" }),
++        expect.objectContaining({ name: "origin/main", kind: "remote" }),
++        expect.objectContaining({ name: "v1", kind: "tag" }),
++      ]),
++    );
++    expect(history.refs.some((ref) => ref.name === "origin/HEAD")).toBe(false);
++  });
++});
+diff --git a/src/extensions/default/vcs/git/history.ts b/src/extensions/default/vcs/git/history.ts
+new file mode 100644
+index 0000000..d526815
+--- /dev/null
++++ b/src/extensions/default/vcs/git/history.ts
+@@ -0,0 +1,108 @@
++import type {
++  ExtensionReviewHistory,
++  ExtensionReviewHistoryCommit,
++  ExtensionReviewHistoryRef,
++  ExtensionVcsDiffInput,
++  ExtensionVcsLoadContext,
++} from "../../../../extension-api/types";
++import { runGitText } from "../../../../core/vcs/git";
++
++const HISTORY_LIMIT = 200;
++const HISTORY_INPUT: ExtensionVcsDiffInput = {
++  kind: "vcs",
++  staged: false,
++  options: {},
++};
++
++/** Run one read-only Git history command through Hunk's ordinary Git error boundary. */
++function readGitHistoryText(args: string[], context: ExtensionVcsLoadContext) {
++  return runGitText({
++    input: HISTORY_INPUT,
++    args,
++    cwd: context.cwd,
++    gitExecutable: context.gitExecutable,
++    preventOptionalLocks: true,
++  });
++}
++
++/** Parse one NUL-delimited commit record emitted by `git log`. */
++function parseCommit(record: string): ExtensionReviewHistoryCommit | null {
++  const [id, parents = "", committedAt = "", subject = ""] = record.split("\0");
++  if (!id || !/^\d+$/.test(committedAt)) return null;
++
++  return {
++    id,
++    parentIds: parents.length === 0 ? [] : parents.split(" "),
++    subject,
++    committedAt: new Date(Number(committedAt) * 1_000).toISOString(),
++  };
++}
++
++/** Resolve one full ref name into the public history kind and display name. */
++function describeRef(ref: string): Pick<ExtensionReviewHistoryRef, "kind" | "name"> | null {
++  if (ref.startsWith("refs/heads/")) {
++    return { kind: "branch", name: ref.slice("refs/heads/".length) };
++  }
++  if (ref.startsWith("refs/remotes/")) {
++    return { kind: "remote", name: ref.slice("refs/remotes/".length) };
++  }
++  if (ref.startsWith("refs/tags/")) {
++    return { kind: "tag", name: ref.slice("refs/tags/".length) };
++  }
++  return null;
++}
++
++/** Parse one NUL-delimited ref record emitted by `git for-each-ref`. */
++function parseRef(record: string): ExtensionReviewHistoryRef | null {
++  const [objectId, peeledId = "", ref = "", head = "", symbolicTarget = ""] = record.split("\0");
++  const described = describeRef(ref);
++  if (!objectId || !described || symbolicTarget.length > 0) return null;
++
++  return {
++    ...described,
++    commitId: peeledId || objectId,
++    ...(head === "*" ? { current: true } : {}),
++  };
++}
++
++/** Load bounded local commits and refs for Hunk's read-only history navigator. */
++export async function loadGitReviewHistory(
++  context: ExtensionVcsLoadContext,
++): Promise<ExtensionReviewHistory> {
++  const commits = readGitHistoryText(
++    [
++      "log",
++      "--all",
++      "--topo-order",
++      `--max-count=${HISTORY_LIMIT}`,
++      "--format=%H%x00%P%x00%ct%x00%s",
++    ],
++    context,
++  )
++    .trimEnd()
++    .split("\n")
++    .flatMap((record) => {
++      const commit = parseCommit(record);
++      return commit ? [commit] : [];
++    });
++
++  const refs = readGitHistoryText(
++    [
++      "for-each-ref",
++      "--sort=-committerdate",
++      "--format=%(objectname)%00%(*objectname)%00%(refname)%00%(HEAD)%00%(symref)",
++      "refs/heads",
++      "refs/remotes",
++      "refs/tags",
++    ],
++    context,
++  )
++    .trimEnd()
++    .split("\n")
++    .flatMap((record) => {
++      const ref = parseRef(record);
++      return ref ? [ref] : [];
++    });
++
++  return { commits, refs };
++}
+diff --git a/src/extensions/default/vcs/git/index.ts b/src/extensions/default/vcs/git/index.ts
+index 4ba9b63..8f03aea 100644
+--- a/src/extensions/default/vcs/git/index.ts
++++ b/src/extensions/default/vcs/git/index.ts
+@@ -33,6 +33,7 @@ import {
+   type ExtensionVcsWatchPlan,
+   type HunkExtensionAPI,
+ } from "../../../../extension-api/types";
++import { loadGitReviewHistory } from "./history";
+ 
+ /**
+  * Hunk's Git backend, as a bundled extension.
+@@ -314,6 +315,7 @@ export const GitVcsAdapter = {
+   name: "Git",
+   detect: detectGitRepo,
+   detectionPriority: HUNK_CORE_VCS_DETECTION_PRIORITY,
++  loadHistory: loadGitReviewHistory,
+   operations: {
+     "working-tree-diff": {
+       async load(input, { cwd, gitExecutable = "git" }) {
+diff --git a/src/extensions/runExtension.ts b/src/extensions/runExtension.ts
+index 3a20c7b..4adda9f 100644
+--- a/src/extensions/runExtension.ts
++++ b/src/extensions/runExtension.ts
+@@ -159,6 +159,7 @@ export function toInternalVcsAdapter(
+   }
+ 
+   const detect = adapter.detect;
++  const loadHistory = adapter.loadHistory;
+   // Report once per adapter: detection runs on every session and reload, and a
+   // repeated diagnostic for one authoring mistake is noise, not information.
+   let reportedMismatch = false;
+@@ -191,6 +192,15 @@ export function toInternalVcsAdapter(
+       return { ...detected, id: adapter.id };
+     },
+     operations: internalOperations,
++    ...(loadHistory && {
++      async loadHistory(context) {
++        try {
++          return await loadHistory(context);
++        } catch (error) {
++          throw toUserFacingError(error);
++        }
++      },
++    }),
+   };
+ }
+ 
+diff --git a/src/extensions/types.ts b/src/extensions/types.ts
+index 648f823..a2e0c4f 100644
+--- a/src/extensions/types.ts
++++ b/src/extensions/types.ts
+@@ -54,7 +54,14 @@ export type {
+   ExtensionFactory,
+   ExtensionInputOptions,
+   ExtensionKeyEvent,
++  ExtensionReviewControls,
++  ExtensionReviewHistory,
++  ExtensionReviewHistoryCommit,
++  ExtensionReviewHistoryRef,
++  ExtensionReviewHistoryResult,
+   ExtensionReviewNote,
++  ExtensionReviewRangeResult,
++  ExtensionReviewRangeState,
+   ExtensionNotifyType,
+   ExtensionPaintTheme,
+   ExtensionSelectOptions,
+diff --git a/src/ui/App.tsx b/src/ui/App.tsx
+index b83fdb8..cf62d76 100644
+--- a/src/ui/App.tsx
++++ b/src/ui/App.tsx
+@@ -22,6 +22,7 @@ import type {
+   UserNoteLineTarget,
+ } from "../core/types";
+ import { canReloadInput } from "../core/inputReload";
++import { getConfiguredVcsAdapter } from "../core/vcs";
+ import { sanitizeTerminalLine } from "../lib/terminalText";
+ import { resolveExtensionCommands, resolveExtensionFileViews } from "../extensions/apply";
+ import {
+@@ -35,7 +36,10 @@ import type {
+   ExtensionEventContext,
+   ExtensionFileSide,
+   ExtensionNotifyType,
++  ExtensionReviewControls,
++  ExtensionReviewHistoryResult,
+   ExtensionReviewNote,
++  ExtensionReviewRangeResult,
+   ExtensionSidebarControls,
+   ExtensionWorkspace,
+   ExtensionWorkspaceWriteRequest,
+@@ -79,6 +83,11 @@ import { buildExtensionAppCommands, extensionCommandKeyDefaults } from "./lib/ex
+ import { createGuardedReviewNavigation } from "./lib/extensionNavigation";
+ import type { LineCursor } from "./lib/lineCursors";
+ import { buildExtensionReviewSelection } from "./lib/extensionSelection";
++import {
++  normalizeExtensionReviewRange,
++  resolveExtensionReviewRangeState,
++  withExtensionReviewRange,
++} from "./lib/extensionReview";
+ import { useFilePresentationController } from "./fileViews/useFilePresentationController";
+ import { useFilePresentationRendering } from "./fileViews/useFilePresentationRendering";
+ import { createExtensionSidebarKeybindings, resolveCommandKeys } from "./lib/keymap";
+@@ -608,6 +617,20 @@ export function App({
+    */
+   const reloadAfterWorkspaceWriteRef = useRef<() => void>(() => {});
+ 
++  /**
++   * Replace the current review range through the same late-bound reload path.
++   *
++   * Command contexts are created above the concrete callback so they receive a
++   * stable host capability rather than closing over one render's input.
++   */
++  const setExtensionReviewRangeRef = useRef<(range: string) => Promise<ExtensionReviewRangeResult>>(
++    async () => ({
++      ok: false,
++      reason: "unavailable",
++      detail: "The review range controls are not ready.",
++    }),
++  );
++
+   const {
+     accept: acceptExtensionDialog,
+     cancel: cancelExtensionDialog,
+@@ -722,6 +745,54 @@ export function App({
+     [createExtensionDialogs],
+   );
+ 
++  /** Build review-range controls from a current-state snapshot and a live reload action. */
++  const createReviewControls = useCallback(
++    (): ExtensionReviewControls =>
++      Object.freeze({
++        range: resolveExtensionReviewRangeState(bootstrap.input),
++        setRange(range: string) {
++          return setExtensionReviewRangeRef.current(range);
++        },
++        async loadHistory(): Promise<ExtensionReviewHistoryResult> {
++          if (bootstrap.input.kind !== "vcs") {
++            return {
++              ok: false,
++              reason: "unavailable",
++              detail: "Review history is available only for VCS diff sessions.",
++            };
++          }
++
++          const adapter = getConfiguredVcsAdapter(
++            bootstrap.input.options.vcs,
++            bootstrap.reloadContext.vcsAdapters,
++          );
++          if (!adapter.loadHistory) {
++            return {
++              ok: false,
++              reason: "unavailable",
++              detail: `${adapter.name} does not provide review history.`,
++            };
++          }
++
++          try {
++            const history = await adapter.loadHistory({
++              cwd: bootstrap.reloadContext.repoRoot ?? bootstrap.reloadContext.cwd,
++            });
++            return { ok: true, history };
++          } catch (error) {
++            return {
++              ok: false,
++              reason: "failed",
++              detail: `Failed to load ${adapter.name} history • ${
++                error instanceof Error ? error.message || error.name : String(error)
++              }`,
++            };
++          }
++        },
++      }),
++    [bootstrap.input, bootstrap.reloadContext],
++  );
++
+   // Lifecycle and bus listeners receive the same sidebar controls as commands,
+   // so an extension can react to loaded content by revealing its own pane.
+   if (extensions) {
+@@ -751,6 +822,7 @@ export function App({
+         cwd: extensions?.context.cwd ?? process.cwd(),
+         notify: (message, type) => extensions?.context.notify(message, type),
+         sidebars: createSidebarControls(registered.extensionId),
++        review: createReviewControls(),
+         fileViews: createFileViewControls(registered.extensionId),
+         // Snapshot semantics: built when the key fires, so the handler sees
+         // where the review was at that moment, even if it awaits and the user
+@@ -796,6 +868,7 @@ export function App({
+     [
+       createExtensionDialogs,
+       createFileViewControls,
++      createReviewControls,
+       createSidebarControls,
+       createWorkspaceControls,
+       extensions,
+@@ -1322,6 +1395,71 @@ export function App({
+     });
+   }, [refreshCurrentInput]);
+ 
++  /** Replace one extension-requested VCS range while preserving the active Hunk view. */
++  const setExtensionReviewRange = useCallback(
++    async (requestedRange: string): Promise<ExtensionReviewRangeResult> => {
++      const range = normalizeExtensionReviewRange(requestedRange);
++      if (!appAliveForNavigationRef.current) {
++        return {
++          ok: false,
++          reason: "unavailable",
++          detail: "The review session was reloaded before the range could be changed.",
++        };
++      }
++
++      const state = resolveExtensionReviewRangeState(bootstrap.input);
++      if (!state.available || bootstrap.input.kind !== "vcs") {
++        return {
++          ok: false,
++          reason: "unavailable",
++          detail: state.available
++            ? "Review ranges are available only for VCS diff sessions."
++            : state.detail,
++        };
++      }
++
++      const nextInput = withCurrentViewOptions(withExtensionReviewRange(bootstrap.input, range), {
++        layoutMode,
++        themeId,
++        showAgentNotes,
++        showHunkHeaders,
++        showLineNumbers,
++        showMenuBar,
++        wrapLines,
++      });
++
++      try {
++        await onReloadSession(nextInput, {
++          reason: "manual",
++          resetApp: false,
++          sourcePath: bootstrap.changeset.sourceLabel,
++        });
++        return { ok: true };
++      } catch (error) {
++        return {
++          ok: false,
++          reason: "failed",
++          detail: `Failed to load review range ${range} • ${
++            error instanceof Error ? error.message || error.name : String(error)
++          }`,
++        };
++      }
++    },
++    [
++      bootstrap.changeset.sourceLabel,
++      bootstrap.input,
++      layoutMode,
++      onReloadSession,
++      showAgentNotes,
++      showHunkHeaders,
++      showLineNumbers,
++      showMenuBar,
++      themeId,
++      wrapLines,
++    ],
++  );
++  setExtensionReviewRangeRef.current = setExtensionReviewRange;
++
+   // A completed extension write is a source change the user did not make in an
+   // editor, so it reloads through exactly the path the refresh key takes.
+   reloadAfterWorkspaceWriteRef.current = triggerRefreshCurrentInput;
+@@ -1874,6 +2012,7 @@ export function App({
+         theme={activeTheme}
+         width={pane.width}
+         keybindings={sidebarKeybindings}
++        review={createReviewControls()}
+         notify={(message, type) => extensions?.context.notify(message, type)}
+         onSelectFile={(fileId) => {
+           focusFiles();
+diff --git a/src/ui/AppHost.extension-review.test.tsx b/src/ui/AppHost.extension-review.test.tsx
+new file mode 100644
+index 0000000..7e84316
+--- /dev/null
++++ b/src/ui/AppHost.extension-review.test.tsx
+@@ -0,0 +1,184 @@
++import { execFileSync } from "node:child_process";
++import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { afterEach, describe, expect, test } from "bun:test";
++import { testRender } from "@opentui/react/test-utils";
++import { act } from "react";
++import { removeTestDirectory } from "../../test/helpers/filesystem";
++import { loadAppBootstrap } from "../core/loaders";
++import { loadStartupExtensions } from "../extensions/startup";
++import { AppHost } from "./AppHost";
++
++const tempDirs: string[] = [];
++
++afterEach(async () => {
++  for (const dir of tempDirs.splice(0)) {
++    await removeTestDirectory(dir);
++  }
++});
++
++function createTempDir(prefix: string) {
++  const dir = mkdtempSync(join(tmpdir(), prefix));
++  tempDirs.push(dir);
++  return dir;
++}
++
++/** Build one linear three-commit history whose adjacent diffs have distinct lines. */
++function createHistoryRepo() {
++  const repo = createTempDir("hunk-ext-review-range-");
++  const file = join(repo, "history.txt");
++  execFileSync("git", ["init"], { cwd: repo, stdio: "ignore" });
++  execFileSync("git", ["config", "user.email", "test@test"], { cwd: repo });
++  execFileSync("git", ["config", "user.name", "test"], { cwd: repo });
++
++  writeFileSync(file, "base\n");
++  execFileSync("git", ["add", "."], { cwd: repo });
++  execFileSync("git", ["commit", "-m", "base"], { cwd: repo, stdio: "ignore" });
++
++  writeFileSync(file, "base\nmiddle range\n");
++  execFileSync("git", ["add", "."], { cwd: repo });
++  execFileSync("git", ["commit", "-m", "middle"], { cwd: repo, stdio: "ignore" });
++
++  writeFileSync(file, "base\nmiddle range\nhead range\n");
++  execFileSync("git", ["add", "."], { cwd: repo });
++  execFileSync("git", ["commit", "-m", "head"], { cwd: repo, stdio: "ignore" });
++  return repo;
++}
++
++function readProbe(logPath: string) {
++  try {
++    return readFileSync(logPath, "utf8");
++  } catch {
++    return "";
++  }
++}
++
++async function flush(setup: Awaited<ReturnType<typeof testRender>>) {
++  await act(async () => {
++    await setup.renderOnce();
++    await Bun.sleep(0);
++    await setup.renderOnce();
++  });
++}
++
++async function flushUntil(
++  setup: Awaited<ReturnType<typeof testRender>>,
++  predicate: () => boolean,
++  description: string,
++  timeoutMs = 4_000,
++) {
++  const deadline = Date.now() + timeoutMs;
++  while (!predicate()) {
++    if (Date.now() > deadline) {
++      throw new Error(`Timed out after ${timeoutMs}ms waiting for ${description}.`);
++    }
++    await flush(setup);
++    await act(async () => {
++      await Bun.sleep(20);
++    });
++  }
++}
++
++/** Launch a range review with one fixture command that requests another range. */
++async function launchRangeExtension(repo: string, range: string, logPath: string) {
++  const extPath = join(createTempDir("hunk-ext-review-range-fixture-"), "range.ts");
++  writeFileSync(
++    extPath,
++    `import { appendFileSync } from "node:fs";\n` +
++      `export default function (hunk) {\n` +
++      `  hunk.registerCommand({ id: "range", title: "Range", key: "y" }, async (ctx) => {\n` +
++      `    appendFileSync(${JSON.stringify(logPath)}, "state " + JSON.stringify(ctx.review.range) + "\\n");\n` +
++      `    const history = await ctx.review.loadHistory();\n` +
++      `    appendFileSync(${JSON.stringify(logPath)}, "history " + JSON.stringify(history) + "\\n");\n` +
++      `    const result = await ctx.review.setRange(${JSON.stringify(range)});\n` +
++      `    appendFileSync(${JSON.stringify(logPath)}, "result " + JSON.stringify(result) + "\\n");\n` +
++      `  });\n` +
++      `}\n`,
++  );
++
++  const bootstrap = await loadAppBootstrap(
++    {
++      kind: "vcs",
++      range: "HEAD~1...HEAD",
++      staged: false,
++      options: { mode: "stack", extensionPaths: [extPath] },
++    },
++    { cwd: repo },
++  );
++  bootstrap.extensions = await loadStartupExtensions({
++    extensions: { enabled: true, paths: [], repoPaths: [], extensionConfigs: {} },
++    cwd: repo,
++    cliExtensionPaths: [extPath],
++  });
++  expect(bootstrap.extensions.issues).toEqual([]);
++  return bootstrap;
++}
++
++describe("extension review range controls", () => {
++  test("a command replaces the current range through the normal soft reload", async () => {
++    const repo = createHistoryRepo();
++    const logPath = join(createTempDir("hunk-ext-review-range-log-"), "probe.log");
++    const bootstrap = await launchRangeExtension(repo, "HEAD~2...HEAD~1", logPath);
++    const setup = await testRender(<AppHost bootstrap={bootstrap} onQuit={() => {}} />, {
++      width: 120,
++      height: 24,
++    });
++
++    try {
++      await flushUntil(
++        setup,
++        () => setup.captureCharFrame().includes("head range"),
++        "the initial head range",
++      );
++
++      await act(async () => {
++        await setup.mockInput.typeText("y");
++      });
++      await flushUntil(
++        setup,
++        () =>
++          setup.captureCharFrame().includes("middle range") &&
++          !setup.captureCharFrame().includes("head range") &&
++          readProbe(logPath).includes('result {"ok":true}'),
++        "the extension-requested middle range",
++      );
++
++      expect(readProbe(logPath)).toContain('state {"available":true,"value":"HEAD~1...HEAD"}');
++      expect(readProbe(logPath)).toContain('history {"ok":true');
++      expect(readProbe(logPath)).toContain('"subject":"head"');
++    } finally {
++      await act(async () => {
++        setup.renderer.destroy();
++      });
++    }
++  });
++
++  test("an invalid ref resolves as a contained failed result", async () => {
++    const repo = createHistoryRepo();
++    const logPath = join(createTempDir("hunk-ext-review-range-failure-log-"), "probe.log");
++    const bootstrap = await launchRangeExtension(repo, "missing-ref...HEAD", logPath);
++    const setup = await testRender(<AppHost bootstrap={bootstrap} onQuit={() => {}} />, {
++      width: 120,
++      height: 24,
++    });
++
++    try {
++      await flush(setup);
++      await act(async () => {
++        await setup.mockInput.typeText("y");
++      });
++      await flushUntil(
++        setup,
++        () => readProbe(logPath).includes('"reason":"failed"'),
++        "the failed range result",
++      );
++
++      expect(readProbe(logPath)).toContain("missing-ref...HEAD");
++    } finally {
++      await act(async () => {
++        setup.renderer.destroy();
++      });
++    }
++  });
++});
+diff --git a/src/ui/components/panes/ExtensionSidebarPane.test.tsx b/src/ui/components/panes/ExtensionSidebarPane.test.tsx
+index 01b7dc2..8fe4544 100644
+--- a/src/ui/components/panes/ExtensionSidebarPane.test.tsx
++++ b/src/ui/components/panes/ExtensionSidebarPane.test.tsx
+@@ -3,6 +3,7 @@ import { testRender } from "@opentui/react/test-utils";
+ import { act, useState, type ReactNode } from "react";
+ import { createTestDiffFile } from "../../../../test/helpers/diff-helpers";
+ import type {
++  ExtensionReviewControls,
+   ExtensionSidebarActions,
+   ExtensionSidebarKeybindings,
+   ExtensionSidebarViewProps,
+@@ -25,6 +26,12 @@ const TEST_KEYBINDINGS: ExtensionSidebarKeybindings = {
+   getKeys: () => [],
+ };
+ 
++const TEST_REVIEW: ExtensionReviewControls = {
++  range: { available: true },
++  setRange: async () => ({ ok: true }),
++  loadHistory: async () => ({ ok: true, history: { commits: [], refs: [] } }),
++};
++
+ function createTestFiles() {
+   return [
+     createTestDiffFile({
+@@ -83,6 +90,7 @@ describe("ExtensionSidebarPane actions", () => {
+         theme={theme}
+         width={30}
+         keybindings={TEST_KEYBINDINGS}
++        review={TEST_REVIEW}
+         notify={(message) => notifications.push(message)}
+         onSelectFile={() => {}}
+         onSelectHunk={(fileId, hunkIndex) => hunkSelections.push([fileId, hunkIndex])}
+@@ -146,6 +154,7 @@ describe("ExtensionSidebarPane failure recovery", () => {
+           theme={theme}
+           width={30}
+           keybindings={TEST_KEYBINDINGS}
++          review={TEST_REVIEW}
+           notify={(message) => notifications.push(message)}
+           onSelectFile={() => {}}
+           onSelectHunk={() => {}}
+diff --git a/src/ui/components/panes/ExtensionSidebarPane.tsx b/src/ui/components/panes/ExtensionSidebarPane.tsx
+index 83f1fe0..7b38c27 100644
+--- a/src/ui/components/panes/ExtensionSidebarPane.tsx
++++ b/src/ui/components/panes/ExtensionSidebarPane.tsx
+@@ -2,6 +2,7 @@ import { Component, useMemo, type ReactNode } from "react";
+ import type {
+   ExtensionDiffFile,
+   ExtensionNotifyType,
++  ExtensionReviewControls,
+   ExtensionSidebarActions,
+   ExtensionSidebarKeybindings,
+   ExtensionSidebarViewProps,
+@@ -91,6 +92,7 @@ export function ExtensionSidebarPane({
+   theme,
+   width,
+   keybindings,
++  review,
+   notify,
+   onSelectFile,
+   onSelectHunk,
+@@ -116,6 +118,7 @@ export function ExtensionSidebarPane({
+   theme: AppTheme;
+   width: number;
+   keybindings: ExtensionSidebarKeybindings;
++  review: ExtensionReviewControls;
+   notify: ExtensionNotifySink;
+   onSelectFile: (fileId: string) => void;
+   onSelectHunk: (fileId: string, hunkIndex: number) => void;
+@@ -162,6 +165,7 @@ export function ExtensionSidebarPane({
+     width,
+     theme: publicTheme,
+     keybindings,
++    review,
+     actions,
+   };
+ 
+diff --git a/src/ui/components/ui-components.test.tsx b/src/ui/components/ui-components.test.tsx
+index 68bbf8e..5749e7c 100644
+--- a/src/ui/components/ui-components.test.tsx
++++ b/src/ui/components/ui-components.test.tsx
+@@ -459,6 +459,11 @@ describe("UI components", () => {
+         theme={theme}
+         width={30}
+         keybindings={{ matches: () => false, getKeys: () => [] }}
++        review={{
++          range: { available: true },
++          setRange: async () => ({ ok: true }),
++          loadHistory: async () => ({ ok: true, history: { commits: [], refs: [] } }),
++        }}
+         actions={{ selectFile: () => {}, selectHunk: () => {}, notify: () => {} }}
+       />,
+       36,
+diff --git a/src/ui/lib/extensionReview.test.ts b/src/ui/lib/extensionReview.test.ts
+new file mode 100644
+index 0000000..9bf7de2
+--- /dev/null
++++ b/src/ui/lib/extensionReview.test.ts
+@@ -0,0 +1,53 @@
++import { describe, expect, test } from "bun:test";
++import type { CliInput, VcsDiffCommandInput } from "../../core/types";
++import {
++  normalizeExtensionReviewRange,
++  resolveExtensionReviewRangeState,
++  withExtensionReviewRange,
++} from "./extensionReview";
++
++const vcsInput: VcsDiffCommandInput = {
++  kind: "vcs",
++  staged: false,
++  pathspecs: ["src"],
++  options: { mode: "stack" },
++};
++
++describe("extension review range policy", () => {
++  test("exposes the current VCS range without losing working-tree eligibility", () => {
++    expect(resolveExtensionReviewRangeState(vcsInput)).toEqual({ available: true });
++    expect(resolveExtensionReviewRangeState({ ...vcsInput, range: "main...HEAD" })).toEqual({
++      available: true,
++      value: "main...HEAD",
++    });
++  });
++
++  test("refuses review kinds that cannot express a VCS range", () => {
++    const input: CliInput = {
++      kind: "diff",
++      left: "before.ts",
++      right: "after.ts",
++      options: {},
++    };
++
++    expect(resolveExtensionReviewRangeState(input)).toEqual({
++      available: false,
++      detail: "Review ranges are available only for VCS diff sessions.",
++    });
++  });
++
++  test("normalizes a range and rejects blank extension requests", () => {
++    expect(normalizeExtensionReviewRange("  main...HEAD  ")).toBe("main...HEAD");
++    expect(() => normalizeExtensionReviewRange("   ")).toThrow(
++      "review.setRange requires a non-empty range string.",
++    );
++  });
++
++  test("changes only range semantics and preserves the rest of the VCS input", () => {
++    expect(withExtensionReviewRange({ ...vcsInput, staged: true }, "main...HEAD")).toEqual({
++      ...vcsInput,
++      range: "main...HEAD",
++      staged: false,
++    });
++  });
++});
+diff --git a/src/ui/lib/extensionReview.ts b/src/ui/lib/extensionReview.ts
+new file mode 100644
+index 0000000..ccc22dd
+--- /dev/null
++++ b/src/ui/lib/extensionReview.ts
+@@ -0,0 +1,39 @@
++import { canReloadInput } from "../../core/inputReload";
++import type { CliInput, VcsDiffCommandInput } from "../../core/types";
++import type { ExtensionReviewRangeState } from "../../extension-api/types";
++
++/** Describe whether one current input may be replaced with a VCS comparison range. */
++export function resolveExtensionReviewRangeState(input: CliInput): ExtensionReviewRangeState {
++  if (input.kind !== "vcs") {
++    return {
++      available: false,
++      detail: "Review ranges are available only for VCS diff sessions.",
++    };
++  }
++
++  if (!canReloadInput(input)) {
++    return {
++      available: false,
++      detail: "Review ranges need a session whose inputs can be reloaded.",
++    };
++  }
++
++  return input.range === undefined ? { available: true } : { available: true, value: input.range };
++}
++
++/** Normalize one extension-authored range, rejecting malformed requests as extension bugs. */
++export function normalizeExtensionReviewRange(range: unknown): string {
++  if (typeof range !== "string" || range.trim().length === 0) {
++    throw new Error("review.setRange requires a non-empty range string.");
++  }
++
++  return range.trim();
++}
++
++/** Replace only the VCS range, keeping pathspecs and every host-owned review option. */
++export function withExtensionReviewRange(
++  input: VcsDiffCommandInput,
++  range: string,
++): VcsDiffCommandInput {
++  return { ...input, range, staged: false };
++}
