@@ -51,6 +51,8 @@ const HOST_MODULE_LOADERS: Record<string, () => Promise<object>> = {
   "@opentui/react/jsx-runtime": () => import("@opentui/react/jsx-runtime"),
   "@opentui/react/jsx-dev-runtime": () => import("@opentui/react/jsx-dev-runtime"),
   "@opentui/core": () => import("@opentui/core"),
+  "@victor-software-house/hunk/extension": () => import("../extension-api"),
+  // Existing upstream-authored extensions keep loading inside the fork.
   "hunkdiff/extension": () => import("../extension-api"),
 };
 
