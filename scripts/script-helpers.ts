@@ -3,14 +3,8 @@
 /**
  * Shared cross-platform helpers for Bun-driven repo scripts.
  *
- * On Windows, Node ships `npm` (a shell-script shim) alongside `npm.cmd`. Bun
- * (and Node `child_process` without `shell: true`) cannot execute the shim
- * directly, so we must spawn the `.cmd` wrapper instead. The helpers below
- * give scripts one place to resolve those names.
+ * These helpers normalize environment behavior for Bun-spawned commands.
  */
-
-/** Command name to invoke `npm` from Bun.spawn on the current platform. */
-export const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 
 /**
  * Build a child-process env that overrides PATH cleanly on every platform.

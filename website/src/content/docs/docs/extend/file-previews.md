@@ -34,7 +34,7 @@ hunk.registerCommand({ id: "toggle-preview", title: "Toggle preview", key: "f8" 
 A view has an id, a title, a cheap file matcher, and a layout function:
 
 ```ts
-import type { HunkExtensionAPI } from "hunkdiff/extension";
+import type { HunkExtensionAPI } from "@victor-software-house/hunk/extension";
 
 export default function (hunk: HunkExtensionAPI) {
   hunk.registerFileView({

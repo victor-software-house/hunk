@@ -152,7 +152,7 @@ Mirror pi's model closely; it is proven and our users overlap with pi's.
 
 ````ts
 // ~/.config/hunk/extensions/copy-as-suggestion.ts
-import type { HunkExtensionAPI } from "hunkdiff/extension";
+import type { HunkExtensionAPI } from "@victor-software-house/hunk/extension";
 
 export default function (hunk: HunkExtensionAPI) {
   hunk.registerAction({
@@ -263,7 +263,7 @@ of the same structure for free.
   in the extension API.
 - **Windows.** Discovery paths and `ctx.exec` must stay portable per our
   cross-platform rules; nothing here is inherently Unix-only.
-- **Does the OpenTUI embedding API make some of this moot?** `hunkdiff/opentui`
+- **Does the OpenTUI embedding API make some of this moot?** `@victor-software-house/hunk/opentui`
   already offers "extension by embedding" for people building their own review
   UIs. The answer is no — embedding serves builders of _other tools_;
   extensions serve users of _Hunk_. But the two should share the same façade

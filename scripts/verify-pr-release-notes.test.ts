@@ -20,14 +20,14 @@ const generatedPaths = [
 
 function validInput() {
   return {
-    packageJson: { name: "hunkdiff", version: "0.18.0-beta.0" },
+    packageJson: { name: "@victor-software-house/hunk", version: "0.18.0-beta.0" },
     pre: {
       mode: "pre",
       tag: "beta",
-      initialVersions: { hunkdiff: "0.17.7" },
+      initialVersions: { "@victor-software-house/hunk": "0.17.7" },
       changesets: ["new-feature", "old-fix"],
     },
-    changelog: "# Changelog\n\n## 0.18.0-beta.0\n\n- Added a feature.\n\n## 0.17.7\n",
+    changelog: "# Changelog\n\n## 0.18.0-beta.0\n\n- Added a feature.\n\n## 0.18.0\n\n## 0.17.7\n",
     changesetIdsOnDisk: new Set(["new-feature", "old-fix"]),
   };
 }
@@ -57,7 +57,7 @@ function createTestRepo() {
   runGit(root, ["config", "user.name", "Hunk Test"]);
 
   writeJson(path.join(root, "package.json"), {
-    name: "hunkdiff",
+    name: "@victor-software-house/hunk",
     version: "0.17.7",
     private: true,
     scripts: { "changeset:status": "bun run ./record-status.ts" },
@@ -80,10 +80,13 @@ function writeGeneratedPrerelease(root: string, initialVersion = "0.17.7") {
   writeJson(path.join(root, ".changeset", "pre.json"), {
     mode: "pre",
     tag: "beta",
-    initialVersions: { hunkdiff: initialVersion },
+    initialVersions: { "@victor-software-house/hunk": initialVersion },
     changesets: ["new-feature"],
   });
-  writeFileSync(path.join(root, "CHANGELOG.md"), "# Changelog\n\n## 0.18.0-beta.0\n\n## 0.17.7\n");
+  writeFileSync(
+    path.join(root, "CHANGELOG.md"),
+    "# Changelog\n\n## 0.18.0-beta.0\n\n## 0.18.0\n\n## 0.17.7\n",
+  );
   runGit(root, ["add", "."]);
   runGit(root, ["commit", "--quiet", "-m", "prepare prerelease"]);
 }
@@ -135,20 +138,20 @@ describe("validateGeneratedPrerelease", () => {
 
   test("requires a stable initial package version", () => {
     const input = validInput();
-    input.pre.initialVersions.hunkdiff = "0.17.7-beta.1";
+    input.pre.initialVersions["@victor-software-house/hunk"] = "0.17.7-beta.1";
 
     expect(() => validateGeneratedPrerelease(input)).toThrow(
-      "Missing stable initial version for package hunkdiff",
+      "Missing stable initial version for package @victor-software-house/hunk",
     );
   });
 
   test("requires the latest stable changelog version", () => {
     const input = validInput();
-    input.pre.initialVersions.hunkdiff = "0.17.6";
+    input.pre.initialVersions["@victor-software-house/hunk"] = "0.17.6";
     input.changelog += "\n## 0.17.6\n";
 
     expect(() => validateGeneratedPrerelease(input)).toThrow(
-      "Initial version 0.17.6 does not match latest stable release 0.17.7",
+      "Initial version 0.17.6 does not match latest prior stable release 0.17.7",
     );
   });
 
@@ -226,7 +229,7 @@ describe("verifyPrReleaseNotes", () => {
     writeGeneratedPrerelease(root, "0.17.6");
 
     await expect(verifyPrReleaseNotes(base, "HEAD", root)).rejects.toThrow(
-      "Initial version 0.17.6 does not match latest stable release 0.17.7",
+      "Initial version 0.17.6 does not match latest prior stable release 0.17.7",
     );
   });
 });

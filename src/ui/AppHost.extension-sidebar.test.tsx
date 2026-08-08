@@ -514,7 +514,7 @@ describe("extension sidebar views", () => {
       `import { appendFileSync } from "node:fs";\n` +
         `import { useEffect, useRef } from "react";\n` +
         `import type { ScrollBoxRenderable } from "@opentui/core";\n` +
-        `import type { ExtensionSidebarViewProps, HunkExtensionAPI } from "hunkdiff/extension";\n` +
+        `import type { ExtensionSidebarViewProps, HunkExtensionAPI } from "@victor-software-house/hunk/extension";\n` +
         `\n` +
         `function RefList({ files, selectedFileId, theme }: ExtensionSidebarViewProps) {\n` +
         `  const scrollRef = useRef<ScrollBoxRenderable | null>(null);\n` +
