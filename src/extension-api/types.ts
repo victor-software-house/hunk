@@ -1,5 +1,5 @@
 /**
- * The public contract behind `hunkdiff/extension`.
+ * The public contract behind `@victor-software-house/hunk/extension`.
  *
  * This module imports nothing on purpose. Whole-program declaration emission
  * ships every file the entry point reaches, so any import here would publish a

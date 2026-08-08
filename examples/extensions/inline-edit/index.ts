@@ -36,7 +36,7 @@
  * park on a mailbox nothing is left holding a reference to.
  */
 
-import { matchesKey } from "hunkdiff/extension";
+import { matchesKey } from "@victor-software-house/hunk/extension";
 import type {
   ExtensionCommandContext,
   ExtensionDiffFile,
@@ -45,7 +45,7 @@ import type {
   ExtensionFileViewRow,
   ExtensionFileViewSpan,
   ExtensionKeyEvent,
-} from "hunkdiff/extension";
+} from "@victor-software-house/hunk/extension";
 
 /** The registered view id. This folder's extension id is `inline-edit` too. */
 const VIEW_ID = "inline-edit";

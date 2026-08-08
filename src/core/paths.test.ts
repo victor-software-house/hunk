@@ -47,13 +47,20 @@ describe("paths", () => {
     expect(resolvedPath).toEndWith(join("skills", "hunk-review", "SKILL.md"));
   });
 
-  test("locates the bundled Hunk review skill through a nested hunkdiff package", () => {
+  test("locates the bundled Hunk review skill through the scoped package", () => {
     const tempRoot = createTempRoot("hunk-skill-path-");
 
     try {
-      const nestedPackageRoot = join(tempRoot, "node_modules", "hunkdiff");
+      const nestedPackageRoot = join(tempRoot, "node_modules", "@victor-software-house", "hunk");
       const skillPath = join(nestedPackageRoot, "skills", "hunk-review", "SKILL.md");
-      const fakeBinary = join(tempRoot, "node_modules", "hunkdiff-linux-x64", "bin", "hunk");
+      const fakeBinary = join(
+        tempRoot,
+        "node_modules",
+        "@victor-software-house",
+        "hunk-linux-x64",
+        "bin",
+        "hunk",
+      );
 
       mkdirSync(dirname(skillPath), { recursive: true });
       mkdirSync(dirname(fakeBinary), { recursive: true });

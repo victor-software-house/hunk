@@ -3,7 +3,8 @@ import { resolveHunkStatePath } from "./paths";
 import type { StartupNotice } from "./startupNotice";
 import { resolveCliVersion, UNKNOWN_CLI_VERSION } from "./version";
 
-const DIST_TAGS_URL = "https://registry.npmjs.org/-/package/hunkdiff/dist-tags";
+const RELEASES_URL = "https://api.github.com/repos/victor-software-house/hunk/releases?per_page=20";
+const RELEASE_TAG_PREFIX = "@victor-software-house/hunk@";
 const STABLE_SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
 const PRERELEASE_SEMVER_PATTERN = /^\d+\.\d+\.\d+-[0-9A-Za-z.-]+$/;
 const DEFAULT_UPDATE_NOTICE_FETCH_TIMEOUT_MS = 5_000;
@@ -46,12 +47,34 @@ function isPrereleaseVersion(version: string) {
   return PRERELEASE_SEMVER_PATTERN.test(version);
 }
 
-/** Parse only the dist-tags that participate in startup update notices. */
+/** Parse VSH GitHub Releases, with dist-tag objects retained as a test seam. */
 function parseDistTags(payload: unknown): ParsedDistTags {
-  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
-    return {};
+  if (Array.isArray(payload)) {
+    const versions = payload.flatMap((entry) => {
+      if (typeof entry !== "object" || entry === null) return [];
+      const release = entry as Record<string, unknown>;
+      const tag = typeof release.tag_name === "string" ? release.tag_name : "";
+      if (
+        release.draft === true ||
+        !tag.startsWith(RELEASE_TAG_PREFIX) ||
+        typeof release.prerelease !== "boolean"
+      ) {
+        return [];
+      }
+      return [{ version: tag.slice(RELEASE_TAG_PREFIX.length), prerelease: release.prerelease }];
+    });
+    const newest = (prerelease: boolean) =>
+      versions
+        .filter((entry) => entry.prerelease === prerelease)
+        .map((entry) => entry.version)
+        .filter((version) => isStableVersion(version) || isPrereleaseVersion(version))
+        .sort((left, right) => Bun.semver.order(right, left))[0];
+    return { latest: newest(false), beta: newest(true) };
   }
 
+  if (typeof payload !== "object" || payload === null) {
+    return {};
+  }
   const record = payload as Record<string, unknown>;
   return {
     latest: typeof record.latest === "string" ? record.latest : undefined,
@@ -91,7 +114,9 @@ function updateInstructionForChannel(channel: UpdateChannel, installSource: Inst
     return "update Hunk through your Nix configuration";
   }
 
-  return channel === "latest" ? "npm i -g hunkdiff" : "npm i -g hunkdiff@beta";
+  return channel === "latest"
+    ? "bun add -g @victor-software-house/hunk"
+    : "bun add -g @victor-software-house/hunk@beta";
 }
 
 /** Build the session-local notice payload for the chosen version and channel. */
@@ -262,7 +287,7 @@ export async function resolveStartupUpdateNotice(
   const { signal, dispose } = createFetchTimeoutSignal(fetchTimeoutMs);
 
   try {
-    const response = await fetchImpl(DIST_TAGS_URL, { signal });
+    const response = await fetchImpl(RELEASES_URL, { signal });
     if (!response.ok) {
       return null;
     }
