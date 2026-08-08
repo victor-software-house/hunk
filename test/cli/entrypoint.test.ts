@@ -168,7 +168,7 @@ describe("CLI entrypoint contracts", () => {
     expect(existsSync(resolvedPath)).toBe(true);
   });
 
-  test("package manifest exposes hunkdiff as an npm exec alias", () => {
+  test("package manifest exposes hunkdiff as a package-exec alias", () => {
     const packageJson = require("../../package.json");
     expect(packageJson.bin).toEqual({
       hunk: "./bin/hunk.cjs",

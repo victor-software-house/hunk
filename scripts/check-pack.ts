@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { checkExtensionConsumerTypes } from "./extension-consumer-check";
 import { buildDocExamples } from "./extension-doc-examples";
-import { npmCommand } from "./script-helpers";
+import { runBunPackDryRun } from "./bun-pack";
 
 const repoRoot = path.resolve(import.meta.dir, "..");
 
@@ -20,7 +20,7 @@ const CONSUMER_SOURCE = `
 import {
   HUNK_CORE_VCS_DETECTION_PRIORITY,
   HunkExtensionUserError,
-} from "hunkdiff/extension";
+} from "@victor-software-house/hunk/extension";
 import type {
   ExtensionChangeset,
   ExtensionFileViewRow,
@@ -35,7 +35,7 @@ import type {
   ExtensionWorkspaceWriteResult,
   HunkExtensionAPI,
   NamedCustomThemeConfig,
-} from "hunkdiff/extension";
+} from "@victor-software-house/hunk/extension";
 
 export default function (hunk: HunkExtensionAPI) {
   const noSelection: ExtensionReviewSelection = { file: null, hunkIndex: null };
@@ -204,45 +204,16 @@ export default function (hunk: HunkExtensionAPI) {
 
 interface PackedFile {
   path: string;
-  size: number;
 }
 
 interface PackResult {
   name: string;
   version: string;
-  filename: string;
   entryCount: number;
   files: PackedFile[];
 }
 
-const proc = Bun.spawnSync([npmCommand, "pack", "--dry-run", "--json"], {
-  cwd: process.cwd(),
-  stdin: "ignore",
-  stdout: "pipe",
-  stderr: "pipe",
-  env: process.env,
-});
-
-const stdout = Buffer.from(proc.stdout).toString("utf8").trim();
-const stderr = Buffer.from(proc.stderr).toString("utf8").trim();
-
-if (proc.exitCode !== 0) {
-  throw new Error(stderr || stdout || "npm pack --dry-run failed");
-}
-
-const jsonMatch = stdout.match(/(\[\s*\{[\s\S]*\}\s*\])\s*$/);
-const jsonText = jsonMatch?.[1];
-
-if (!jsonText) {
-  throw new Error(`Could not find npm pack JSON output. Full stdout:\n${stdout}`);
-}
-
-const parsed = JSON.parse(jsonText) as PackResult[];
-const pack = parsed[0];
-
-if (!pack) {
-  throw new Error("npm pack --dry-run returned no pack result.");
-}
+const pack: PackResult = runBunPackDryRun(process.cwd());
 
 const publishedPaths = new Set(pack.files.map((file) => file.path));
 const requiredPaths = [
@@ -262,7 +233,7 @@ const requiredPaths = [
 
 for (const path of requiredPaths) {
   if (!publishedPaths.has(path)) {
-    throw new Error(`Expected npm package to include ${path}.`);
+    throw new Error(`Expected package to include ${path}.`);
   }
 }
 
@@ -284,11 +255,11 @@ for (const file of pack.files) {
     forbiddenPrefixes.some((prefix) => file.path.startsWith(prefix)) ||
     forbiddenPaths.includes(file.path)
   ) {
-    throw new Error(`Unexpected file in npm package: ${file.path}`);
+    throw new Error(`Unexpected file in package: ${file.path}`);
   }
 }
 
-// `hunkdiff/extension` is a façade: its declarations must describe the authoring
+// `@victor-software-house/hunk/extension` is a façade: its declarations must describe the authoring
 // contract and nothing else. Whole-program declaration emission happily ships
 // every module the entry reaches, so the published tree is allowlisted here —
 // a stray `extension/core/**` or `extension/extensions/**` file means the entry
@@ -309,13 +280,13 @@ for (const file of pack.files) {
   ) {
     throw new Error(
       `Unexpected file in the published extension surface: ${file.path}. ` +
-        "The hunkdiff/extension entry must only reach src/extension-api.",
+        "The @victor-software-house/hunk/extension entry must only reach src/extension-api.",
     );
   }
 }
 
-if (pack.name !== "hunkdiff") {
-  throw new Error(`Expected npm package name to be hunkdiff, got ${pack.name}.`);
+if (pack.name !== "@victor-software-house/hunk") {
+  throw new Error(`Expected package name to be @victor-software-house/hunk, got ${pack.name}.`);
 }
 
 const extensionTypes = readFileSync(
@@ -356,10 +327,10 @@ const { modes } = checkExtensionConsumerTypes({
 });
 
 console.log(
-  `Verified npm pack output for ${pack.name}@${pack.version} (${pack.entryCount} files).`,
+  `Verified Bun pack output for ${pack.name}@${pack.version} (${pack.entryCount} files).`,
 );
 console.log(
-  `Verified hunkdiff/extension typechecks for consumers using ${modes
+  `Verified @victor-software-house/hunk/extension typechecks for consumers using ${modes
     .map((mode) => `moduleResolution: "${mode}"`)
     .join(" and ")}, ` + `across ${docExamples.length} docs/extensions.md examples.`,
 );

@@ -1,45 +1,28 @@
 ---
 title: Install
-description: Install Hunk with npm, Homebrew, or Nix and verify the CLI.
+description: Install the VSH Hunk fork from GitHub Packages with Bun and verify the CLI.
 ---
 
-Hunk runs on macOS, Linux, and Windows. npm installs require Node.js 18 or newer; Homebrew and Nix installs are self-contained binaries. Git is recommended for the most common review workflows.
+The VSH fork publishes macOS arm64 and Linux x64 binaries through the scoped `@victor-software-house/hunk` package. GitHub Packages requires authentication even though the source repository is public.
 
-## npm
+## Configure Bun
 
-Install the published `hunkdiff` package globally:
+Add the VSH scope once:
+
+```toml
+# ~/.bunfig.toml
+[install.scopes]
+"@victor-software-house" = { url = "https://npm.pkg.github.com", token = "$GITHUB_TOKEN" }
+```
+
+Export a GitHub token with `read:packages`, then install the current beta:
 
 ```bash
-npm install --global hunkdiff
+GITHUB_TOKEN="$(gh auth token)" bun add --global @victor-software-house/hunk@beta
 hunk --version
 ```
 
 The package exposes both `hunk` and `hunkdiff`; the docs use `hunk`.
-
-## Homebrew
-
-```bash
-brew install hunk
-hunk --version
-```
-
-If you previously used the old `modem-dev/tap` formula, remove it before installing from Homebrew core:
-
-```bash
-brew uninstall modem-dev/tap/hunk
-brew install hunk
-```
-
-## Nix
-
-The repository exports a `default` package from `flake.nix`. From a clone of Hunk:
-
-```bash
-nix build
-./result/bin/hunk --version
-```
-
-See the repository's `nix/README.md` for Home Manager and development-shell details.
 
 ## Verify the install
 
@@ -47,6 +30,6 @@ See the repository's `nix/README.md` for Home Manager and development-shell deta
 hunk --help
 ```
 
-You should see `Usage: hunk <command> [options]`. If the shell cannot find Hunk, ensure your global npm or Homebrew binary directory is on `PATH`, then open a new shell.
+You should see `Usage: hunk <command> [options]`. If the shell cannot find Hunk, ensure `$(bun pm bin -g)` is on `PATH`, then open a new shell.
 
 Next, [review your first working tree](/docs/start/quick-start/).
