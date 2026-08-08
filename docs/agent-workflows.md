@@ -47,15 +47,33 @@ hunk session get --repo .
 hunk session review --repo . --json
 ```
 
-- `list` shows the active Hunk windows
-- `get --repo .` confirms which live session matches the current repo
-- `review --json` returns the loaded file and hunk structure without dumping the full raw patch
+- `list` shows the active Hunk process sessions and their ordered review tabs
+- `get --repo .` confirms which process has that repository active
+- `review --json` returns the active tab's loaded file and hunk structure without dumping the full raw patch
 
 Only add `--include-patch` when an agent truly needs raw unified diff text:
 
 ```bash
 hunk session review --repo . --include-patch --json
 ```
+
+### Manage multiple project reviews in one Hunk process
+
+Create and activate a named tab with its own project and diff range:
+
+```bash
+hunk session tab add <session-id> --name "api" --source /path/to/api -- diff main...feature
+```
+
+Use the stable tab id or unique name for later mutations:
+
+```bash
+hunk session tab select <session-id> --tab api
+hunk session tab rename <session-id> --tab api --name backend
+hunk session tab close <session-id> --tab backend
+```
+
+The TUI's `＋` action and `Ctrl-T` open the same name/project/range creation flow.
 
 ### Move the live window to the right place
 
@@ -75,6 +93,7 @@ hunk session reload --repo . -- show HEAD~1 -- README.md
 
 Notes:
 
+- ordinary navigation, reload, and comment commands target only the active tab
 - always include `--` before the nested Hunk command in `reload`
 - `--hunk` is 1-based
 - `--next-comment` and `--prev-comment` are handy when an agent is walking the user through existing notes

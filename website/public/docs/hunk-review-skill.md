@@ -106,6 +106,23 @@ hunk session reload --session-path /path/to/live-window --source /path/to/other-
 - If the live session is already showing the target worktree, prefer `hunk session reload --repo /path/to/worktree -- diff`
 - `--session-path` targets the live window when you need to keep session selection separate from reload source
 
+### Review tabs
+
+One Hunk process can keep independent named project reviews mounted. Create a tab with its project directory and full review command after `--`; target later mutations by stable tab id or unique name:
+
+```bash
+hunk session tab add (<session-id> | --repo <path> | --session-path <path>) --name <name> --source <path> [--json] -- diff [ref] [-- <pathspec...>]
+hunk session tab add (<session-id> | --repo <path> | --session-path <path>) --name <name> --source <path> [--json] -- show [ref] [-- <pathspec...>]
+hunk session tab select (<session-id> | --repo <path> | --session-path <path>) --tab <tab> [--json]
+hunk session tab rename (<session-id> | --repo <path> | --session-path <path>) --tab <tab> --name <name> [--json]
+hunk session tab close (<session-id> | --repo <path> | --session-path <path>) --tab <tab> [--json]
+```
+
+- `tab add` activates the new tab and accepts the same `diff` / `show` review syntax as a normal launch
+- `--source` is the new tab's project directory; the outer selector still identifies the existing Hunk process
+- `--tab` resolves a stable tab id first, then a unique normalized name
+- Ordinary navigate, reload, and comment commands continue to target only the active tab
+
 ### Comments
 
 ```bash

@@ -11,6 +11,7 @@ import { routeKeyOwnership, type KeyOwner } from "../lib/keyRouting";
 type FocusArea = "files" | "filter" | "note";
 
 export interface UseAppKeyboardShortcutsOptions {
+  enabled?: boolean;
   activeMenuId: MenuId | null;
   activateCurrentMenuItem: () => void;
   closeAgentSkill: () => void;
@@ -47,6 +48,7 @@ export interface UseAppKeyboardShortcutsOptions {
   moveMenuItem: (delta: number) => void;
   moveThemeSelector: (delta: number) => void;
   openMenu: (menuId: MenuId) => void;
+  openNewReviewTab?: () => void;
   saveConfigPromptOpen: boolean;
   saveViewPreferencesAndQuit: () => void;
   discardViewPreferencesAndQuit: () => void;
@@ -80,6 +82,7 @@ export interface UseAppKeyboardShortcutsOptions {
  * full contract, including why a boolean cannot express it.
  */
 export function useAppKeyboardShortcuts({
+  enabled = true,
   activeMenuId,
   activateCurrentMenuItem,
   closeAgentSkill,
@@ -104,6 +107,7 @@ export function useAppKeyboardShortcuts({
   moveMenuItem,
   moveThemeSelector,
   openMenu,
+  openNewReviewTab,
   saveConfigPromptOpen,
   saveViewPreferencesAndQuit,
   discardViewPreferencesAndQuit,
@@ -500,6 +504,12 @@ export function useAppKeyboardShortcuts({
   };
 
   useKeyboard((key: KeyEvent) => {
+    if (!enabled) return;
+    if (openNewReviewTab && key.ctrl && (key.name === "t" || key.sequence === "t")) {
+      consumeKey(key);
+      openNewReviewTab();
+      return;
+    }
     // Precedence is the array order: app-critical prompts, extension dialogs,
     // then menus and overlays, then focused text inputs, then an active file
     // view mode, and finally the command table below.
