@@ -88,7 +88,7 @@ describe("PTY navigation", () => {
     const session = await harness.launchHunk({
       args: ["diff", "--mode", "split"],
       cwd: fixture.dir,
-      cols: 120,
+      cols: 220,
       rows: 16,
     });
 
@@ -160,6 +160,33 @@ describe("PTY navigation", () => {
 
       expect(firstHunk).toContain("line1 = 100");
       expect(firstHunk).not.toContain("line60 = 6000");
+    } finally {
+      session.close();
+    }
+  });
+
+  test("R opens the bundled history range flow without replacing the review stream", async () => {
+    const fixture = harness.createSidebarJumpRepoFixture();
+    const session = await harness.launchHunk({
+      args: ["diff", "--mode", "split"],
+      cwd: fixture.dir,
+      cols: 220,
+      rows: 16,
+    });
+
+    try {
+      const initial = await session.waitForText(/Files\s+History/, { timeout: 15_000 });
+      expect(initial).toContain("alpha.ts");
+
+      await session.type("R");
+      const history = await session.waitForText(/Choose base, then head/, { timeout: 5_000 });
+      expect(history).toContain("History");
+      expect(history).toMatch(/\* (?:main|master)/);
+      expect(history).toContain("alpha.ts");
+
+      await session.press("escape");
+      const files = await session.waitForText(/alpha\.ts/, { timeout: 5_000 });
+      expect(files).not.toContain("Choose base, then head");
     } finally {
       session.close();
     }

@@ -1,7 +1,10 @@
-import type { ScrollBoxRenderable } from "@opentui/core";
-import { useTerminalDimensions } from "@opentui/react";
+import type { KeyEvent, ScrollBoxRenderable } from "@opentui/core";
+import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { ExtensionSidebarViewProps } from "../../../../extension-api/types";
+import type {
+  ExtensionReviewHistory,
+  ExtensionSidebarViewProps,
+} from "../../../../extension-api/types";
 import { sidebarEntryStatsWidth } from "../../../../ui/lib/files";
 import { fileRowId } from "../../../../ui/lib/ids";
 import { buildSidebarRenderWindow } from "../../../../ui/lib/sidebarRenderWindow";
@@ -15,6 +18,7 @@ import {
   type RegisteredSidebarView,
 } from "../../../types";
 import { buildSidebarFileTree } from "../../../../ui/lib/sidebarFileTree";
+import { fitText } from "../../../../ui/lib/text";
 
 /**
  * Hunk's file-navigation sidebar, shipped as a bundled extension.
@@ -56,13 +60,16 @@ export const BUNDLED_SIDEBAR_EXTENSION_ID = HUNK_VENDOR_EXTENSION_ID;
 export const BUNDLED_SIDEBAR_VIEW_ID = "files";
 
 /** Render the built-in file navigation sidebar from the public sidebar props. */
-export function BuiltInSidebarView({
+export function BuiltInSidebarNavigator({
+  active = true,
   files,
   selectedFileId,
   theme,
   width,
   actions,
-}: ExtensionSidebarViewProps): ReactNode {
+  review,
+  initialTab = "files",
+}: ExtensionSidebarViewProps & { initialTab?: "files" | "history" }): ReactNode {
   const scrollRef = useRef<ScrollBoxRenderable | null>(null);
   const [scrollViewport, setScrollViewport] = useState({ top: 0, height: 0 });
   const [collapsedPaths, setCollapsedPaths] = useState<ReadonlySet<string>>(() => new Set());
@@ -85,6 +92,91 @@ export function BuiltInSidebarView({
       }),
     [entries, terminal.height, scrollViewport.height, scrollViewport.top, selectedFileId],
   );
+
+  const [activeTab, setActiveTab] = useState<"files" | "history">(initialTab);
+  const [history, setHistory] = useState<ExtensionReviewHistory | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyIndex, setHistoryIndex] = useState(0);
+  const [rangeBase, setRangeBase] = useState<string | null>(null);
+
+  const historyRows = useMemo(
+    () => [
+      ...(history?.refs.map((ref) => ({
+        key: `ref:${ref.kind}:${ref.name}`,
+        target: ref.name,
+        label: `${ref.current ? "*" : ref.kind === "branch" ? "b" : ref.kind === "remote" ? "r" : "t"} ${ref.name}`,
+      })) ?? []),
+      ...(history?.commits.map((commit) => ({
+        key: `commit:${commit.id}`,
+        target: commit.id,
+        label: `${commit.id.slice(0, 7)} ${commit.subject}`,
+      })) ?? []),
+    ],
+    [history],
+  );
+
+  useEffect(() => {
+    if (activeTab !== "history" || historyLoading || history || historyError) return;
+    setHistoryLoading(true);
+    void review.loadHistory().then((result) => {
+      setHistoryLoading(false);
+      if (result.ok) {
+        setHistory(result.history);
+        setHistoryIndex(0);
+      } else {
+        setHistoryError(result.detail);
+      }
+    });
+  }, [activeTab, history, historyError, historyLoading, review]);
+
+  const chooseHistoryTarget = async (target: string) => {
+    if (!rangeBase) {
+      setRangeBase(target);
+      actions.notify(`Range base: ${target}`);
+      return;
+    }
+    const range = `${rangeBase}...${target}`;
+    const result = await review.setRange(range);
+    if (!result.ok) actions.notify(result.detail, "warning");
+    setRangeBase(null);
+  };
+
+  useKeyboard((key: KeyEvent) => {
+    if (!active || key.defaultPrevented) return;
+    const isRangeKey =
+      key.name === "R" || (key.name.toLowerCase() === "r" && key.shift) || key.sequence === "R";
+    if (isRangeKey) {
+      key.preventDefault();
+      key.stopPropagation();
+      setActiveTab("history");
+      setRangeBase(null);
+      return;
+    }
+    if (activeTab !== "history") return;
+    if (key.name === "escape") {
+      key.preventDefault();
+      key.stopPropagation();
+      setActiveTab("files");
+      return;
+    }
+    if (key.name === "up" || key.name === "down") {
+      key.preventDefault();
+      key.stopPropagation();
+      const delta = key.name === "up" ? -1 : 1;
+      setHistoryIndex((current) =>
+        historyRows.length === 0 ? 0 : (current + delta + historyRows.length) % historyRows.length,
+      );
+      return;
+    }
+    if (key.name === "return" || key.name === "enter") {
+      const target = historyRows[historyIndex]?.target;
+      if (!target) return;
+      key.preventDefault();
+      key.stopPropagation();
+      void chooseHistoryTarget(target);
+    }
+  });
 
   useEffect(() => {
     const scrollBox = scrollRef.current;
@@ -170,58 +262,133 @@ export function BuiltInSidebarView({
   }, [selectedFileId]);
 
   return (
-    <scrollbox
-      ref={scrollRef}
-      width="100%"
-      height="100%"
-      focused={false}
-      scrollY={true}
-      viewportCulling={true}
-      rootOptions={{ backgroundColor: theme.panel }}
-      wrapperOptions={{ backgroundColor: theme.panel }}
-      viewportOptions={{ backgroundColor: theme.panel }}
-      contentOptions={{ backgroundColor: theme.panel }}
-      verticalScrollbarOptions={{ visible: false }}
-      horizontalScrollbarOptions={{ visible: false }}
-    >
-      <box style={{ width: "100%", flexDirection: "column" }}>
-        {renderWindow.items.map((item) => {
-          if (item.kind === "spacer") {
-            return (
-              <box
-                key={item.key}
-                style={{ width: "100%", height: item.height, backgroundColor: theme.panel }}
-              />
-            );
-          }
-
-          const { entry } = item;
-          const depth = entry.depth ?? 0;
-          return entry.kind === "group" ? (
-            <FileGroupHeader
-              key={entry.id}
-              entry={entry}
-              paddingLeft={1 + depth * 2}
-              textWidth={Math.max(1, textWidth - depth * 2)}
-              theme={theme}
-              onToggle={toggleDirectory}
-            />
-          ) : (
-            <FileListItem
-              key={entry.id}
-              entry={entry}
-              selected={entry.id === selectedFileId}
-              statsWidth={statsWidth}
-              paddingLeft={1 + depth * 2}
-              textWidth={Math.max(1, textWidth - depth * 2)}
-              theme={theme}
-              onSelectFile={actions.selectFile}
-            />
-          );
-        })}
+    <box style={{ width: "100%", height: "100%", flexDirection: "column" }}>
+      <box style={{ width: "100%", height: 1, flexDirection: "row", backgroundColor: theme.panel }}>
+        <box
+          style={{
+            width: 8,
+            height: 1,
+            paddingLeft: 1,
+            backgroundColor: activeTab === "files" ? theme.panelAlt : theme.panel,
+          }}
+          onMouseUp={() => setActiveTab("files")}
+        >
+          <text fg={activeTab === "files" ? theme.accent : theme.muted}>Files</text>
+        </box>
+        <box
+          style={{
+            width: 10,
+            height: 1,
+            paddingLeft: 1,
+            backgroundColor: activeTab === "history" ? theme.panelAlt : theme.panel,
+          }}
+          onMouseUp={() => setActiveTab("history")}
+        >
+          <text fg={activeTab === "history" ? theme.accent : theme.muted}>History</text>
+        </box>
       </box>
-    </scrollbox>
+      {activeTab === "files" ? (
+        <scrollbox
+          ref={scrollRef}
+          width="100%"
+          height="100%"
+          focused={false}
+          scrollY={true}
+          viewportCulling={true}
+          rootOptions={{ backgroundColor: theme.panel }}
+          wrapperOptions={{ backgroundColor: theme.panel }}
+          viewportOptions={{ backgroundColor: theme.panel }}
+          contentOptions={{ backgroundColor: theme.panel }}
+          verticalScrollbarOptions={{ visible: false }}
+          horizontalScrollbarOptions={{ visible: false }}
+        >
+          <box style={{ width: "100%", flexDirection: "column" }}>
+            {renderWindow.items.map((item) => {
+              if (item.kind === "spacer") {
+                return (
+                  <box
+                    key={item.key}
+                    style={{ width: "100%", height: item.height, backgroundColor: theme.panel }}
+                  />
+                );
+              }
+
+              const { entry } = item;
+              const depth = entry.depth ?? 0;
+              return entry.kind === "group" ? (
+                <FileGroupHeader
+                  key={entry.id}
+                  entry={entry}
+                  paddingLeft={1 + depth * 2}
+                  textWidth={Math.max(1, textWidth - depth * 2)}
+                  theme={theme}
+                  onToggle={toggleDirectory}
+                />
+              ) : (
+                <FileListItem
+                  key={entry.id}
+                  entry={entry}
+                  selected={entry.id === selectedFileId}
+                  statsWidth={statsWidth}
+                  paddingLeft={1 + depth * 2}
+                  textWidth={Math.max(1, textWidth - depth * 2)}
+                  theme={theme}
+                  onSelectFile={actions.selectFile}
+                />
+              );
+            })}
+          </box>
+        </scrollbox>
+      ) : (
+        <scrollbox
+          width="100%"
+          height="100%"
+          scrollY={true}
+          viewportCulling={true}
+          rootOptions={{ backgroundColor: theme.panel }}
+          wrapperOptions={{ backgroundColor: theme.panel }}
+          viewportOptions={{ backgroundColor: theme.panel }}
+          contentOptions={{ backgroundColor: theme.panel, flexDirection: "column" }}
+          verticalScrollbarOptions={{ visible: false }}
+          horizontalScrollbarOptions={{ visible: false }}
+        >
+          <text fg={theme.muted}>
+            {rangeBase
+              ? fitText(`Base ${rangeBase} · choose head`, textWidth)
+              : "Choose base, then head · R reset · Esc files"}
+          </text>
+          {historyLoading ? <text fg={theme.muted}>Loading history…</text> : null}
+          {historyError ? (
+            <text fg={theme.badgeRemoved}>{fitText(historyError, textWidth)}</text>
+          ) : null}
+          {historyRows.map((row, index) => (
+            <box
+              key={row.key}
+              style={{
+                width: "100%",
+                height: 1,
+                paddingLeft: 1,
+                backgroundColor: index === historyIndex ? theme.panelAlt : theme.panel,
+              }}
+              onMouseUp={() => {
+                setHistoryIndex(index);
+                void chooseHistoryTarget(row.target);
+              }}
+            >
+              <text fg={index === historyIndex ? theme.text : theme.muted}>
+                {fitText(`${index === historyIndex ? "›" : " "} ${row.label}`, textWidth)}
+              </text>
+            </box>
+          ))}
+        </scrollbox>
+      )}
+    </box>
   );
+}
+
+/** Public-props wrapper registered as Hunk's bundled sidebar view. */
+export function BuiltInSidebarView(props: ExtensionSidebarViewProps): ReactNode {
+  return <BuiltInSidebarNavigator {...props} />;
 }
 
 /** The factory the bundled sidebar registers through, same as any extension. */
