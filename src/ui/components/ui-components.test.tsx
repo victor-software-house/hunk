@@ -20,7 +20,8 @@ import { resolveCommandKeys } from "../lib/keymap";
 
 const { AppHost } = await import("../AppHost");
 const { toReadOnlyFileViews } = await import("../../extensions/events");
-const { BuiltInSidebarView } = await import("../../extensions/default/ui/sidebar");
+const { BuiltInSidebarNavigator, BuiltInSidebarView } =
+  await import("../../extensions/default/ui/sidebar");
 const { HelpDialog } = await import("./chrome/HelpDialog");
 const { AgentCard } = await import("./panes/AgentCard");
 const { AgentInlineNote, measureAgentInlineNoteHeight } = await import("./panes/AgentInlineNote");
@@ -470,13 +471,13 @@ describe("UI components", () => {
       12,
     );
 
-    expect(frame).toContain("src/ui/");
-    expect(frame).toContain("src/core/");
-    expect(frame).toContain("./");
+    expect(frame).toContain("▾ src/");
+    expect(frame).toContain("▾ ui/");
+    expect(frame).toContain("▾ core/");
     expect(frame).toContain(" zzz-root.ts");
-    expect(frame.indexOf("src/ui/")).toBeLessThan(frame.indexOf("./"));
+    expect(frame.indexOf("▾ src/")).toBeLessThan(frame.indexOf("zzz-root.ts"));
     expect(frame).toContain(" App.tsx");
-    expect(frame).toContain(" MenuDropdown.tsx");
+    expect(frame).toContain(" MenuDropdow");
     expect(frame).toContain(" watch.ts");
     expect(frame).toContain("*1 +2 -1");
     expect(frame).toContain("+5");
@@ -484,6 +485,103 @@ describe("UI components", () => {
     expect(frame).not.toContain("+0");
     expect(frame).not.toContain("-0");
     expect(frame).not.toContain("M +2 -1 AI");
+  });
+
+  test("the bundled sidebar keeps the viewport populated for a distant selection", async () => {
+    const theme = resolveTheme("github-dark-default", null);
+    const files = Array.from({ length: 100 }, (_, index) => {
+      const suffix = String(index).padStart(3, "0");
+      return createTestDiffFile(
+        `file-${suffix}`,
+        `file-${suffix}.ts`,
+        `export const value = ${index};\n`,
+        `export const value = ${index + 1};\n`,
+      );
+    });
+    const setup = await testRender(
+      <BuiltInSidebarView
+        files={toReadOnlyFileViews(files)}
+        selectedFileId="file-070"
+        selectedHunkIndex={0}
+        theme={theme}
+        width={30}
+        keybindings={{ matches: () => false, getKeys: () => [] }}
+        review={{
+          range: { available: true },
+          setRange: async () => ({ ok: true }),
+          loadHistory: async () => ({ ok: true, history: { commits: [], refs: [] } }),
+        }}
+        actions={{ selectFile: () => {}, selectHunk: () => {}, notify: () => {} }}
+      />,
+      { width: 36, height: 12 },
+    );
+
+    try {
+      for (let frame = 0; frame < 4; frame += 1) {
+        await act(async () => {
+          await setup.renderOnce();
+          await Bun.sleep(20);
+        });
+      }
+      const frame = setup.captureCharFrame();
+      expect(frame).toContain("file-000.ts");
+      expect(frame).toContain("file-001.ts");
+    } finally {
+      await act(async () => setup.renderer.destroy());
+    }
+  });
+
+  test("the bundled navigator uses R and Enter for one base/head history range", async () => {
+    const theme = resolveTheme("github-dark-default", null);
+    const ranges: string[] = [];
+    const setup = await testRender(
+      <BuiltInSidebarNavigator
+        initialTab="history"
+        files={toReadOnlyFileViews([createTestDiffFile("app", "src/App.tsx", "a\n", "b\n")])}
+        selectedFileId="app"
+        selectedHunkIndex={0}
+        theme={theme}
+        width={34}
+        keybindings={{ matches: () => false, getKeys: () => [] }}
+        review={{
+          range: { available: true },
+          setRange: async (range) => {
+            ranges.push(range);
+            return { ok: true };
+          },
+          loadHistory: async () => ({
+            ok: true,
+            history: {
+              refs: [
+                { name: "main", kind: "branch", commitId: "a".repeat(40), current: true },
+                { name: "feature", kind: "branch", commitId: "b".repeat(40) },
+              ],
+              commits: [],
+            },
+          }),
+        }}
+        actions={{ selectFile: () => {}, selectHunk: () => {}, notify: () => {} }}
+      />,
+      { width: 40, height: 12 },
+    );
+
+    try {
+      for (let frame = 0; frame < 3; frame += 1) {
+        await act(async () => {
+          await setup.renderOnce();
+          await Bun.sleep(20);
+        });
+      }
+      expect(setup.captureCharFrame()).toContain("History");
+      expect(setup.captureCharFrame()).toContain("* main");
+
+      await act(async () => setup.mockInput.pressEnter());
+      await act(async () => setup.mockInput.pressArrow("down"));
+      await act(async () => setup.mockInput.pressEnter());
+      expect(ranges).toEqual(["main...feature"]);
+    } finally {
+      await act(async () => setup.renderer.destroy());
+    }
   });
 
   test("DiffPane renders all diff sections in file order", async () => {
