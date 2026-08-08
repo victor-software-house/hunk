@@ -1,0 +1,157 @@
+name: Release VSH Packages
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish packages, tag the exact main commit, and create the GitHub release
+        required: true
+        default: false
+        type: boolean
+      package_tag:
+        description: GitHub Packages dist-tag
+        required: true
+        default: beta
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  GITHUB_TOKEN: ${{ github.token }}
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: init.defaultBranch
+  GIT_CONFIG_VALUE_0: main
+
+concurrency:
+  group: release-vsh-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-binaries:
+    name: Build ${{ matrix.package_name }}
+    if: >-
+      github.repository == 'victor-software-house/hunk' &&
+      ((github.event_name == 'pull_request' && github.event.pull_request.merged == true &&
+        (github.event.pull_request.title == 'chore(release): version packages' ||
+         github.event.pull_request.title == 'chore(release): version packages (beta)')) ||
+       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package_name: "@victor-software-house/hunk-linux-x64"
+            artifact_name: hunk-linux-x64
+            runner: ubuntu-latest
+          - package_name: "@victor-software-house/hunk-darwin-arm64"
+            artifact_name: hunk-darwin-arm64
+            runner: macos-latest
+    steps:
+      - name: Set up mise
+        uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
+        with:
+          install: false
+          cache: true
+
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+
+      - name: Install locked tools
+        run: mise install --locked
+
+      - name: Install dependencies
+        run: mise deps
+
+      - name: Build host artifact
+        run: |
+          mise run build:bin
+          bun run ./scripts/build-prebuilt-artifact.ts --expect-package "${{ matrix.package_name }}"
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist/release/artifacts/${{ matrix.artifact_name }}
+          if-no-files-found: error
+
+  finalize:
+    name: Stage and optionally publish
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up mise
+        uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
+        with:
+          install: false
+          cache: true
+
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Install locked tools
+        run: mise install --locked
+
+      - name: Install dependencies
+        run: mise deps
+
+      - name: Download platform artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: hunk-*
+          path: dist/release/artifacts
+
+      - name: Validate exact release commit
+        run: bun run ./scripts/validate-vsh-release.ts
+
+      - name: Stage and verify packages
+        id: stage
+        env:
+          REQUESTED_PACKAGE_TAG: ${{ inputs.package_tag }}
+        run: |
+          mise run stage:prebuilt:release
+          mise run check:prebuilt-pack
+          mise run smoke:prebuilt-install
+          package_tag="${REQUESTED_PACKAGE_TAG:-$(bun -e 'const { version } = await Bun.file("package.json").json(); console.log(version.includes("-") ? "beta" : "latest")')}"
+          mise run publish:prebuilt -- --dry-run --tag "$package_tag"
+          echo "package_tag=$package_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Packages
+        if: github.event_name == 'pull_request' || inputs.publish == true
+        run: mise run publish:prebuilt -- --tag "${{ steps.stage.outputs.package_tag }}"
+
+      - name: Smoke exact published version
+        if: github.event_name == 'pull_request' || inputs.publish == true
+        run: bun run ./scripts/smoke-published-package.ts
+
+      - name: Tag exact release commit
+        if: github.event_name == 'pull_request' || inputs.publish == true
+        id: tag
+        run: bun run ./scripts/finalize-vsh-tag.ts
+
+      - name: Create GitHub release
+        if: github.event_name == 'pull_request' || inputs.publish == true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ steps.tag.outputs.tag }}
+        run: |
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            exit 0
+          fi
+          prerelease=()
+          version="$(bun -e 'console.log((await Bun.file("package.json").json()).version)')"
+          if [[ "$version" == *-* ]]; then
+            prerelease+=(--prerelease)
+          fi
+          gh release create "$TAG_NAME" --verify-tag --title "$TAG_NAME" --generate-notes "${prerelease[@]}"

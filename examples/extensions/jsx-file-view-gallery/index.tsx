@@ -8,7 +8,7 @@ import type {
   ExtensionFileViewRowComponentProps,
   ExtensionFileViewSourceRange,
   ExtensionFactory,
-} from "hunkdiff/extension";
+} from "@victor-software-house/hunk/extension";
 
 const SOURCE_LIMIT = 200_000;
 
