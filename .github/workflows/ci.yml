@@ -63,7 +63,9 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Commitlint
-        if: github.event.before != '0000000000000000000000000000000000000000'
+        if: >-
+          github.event.before != '0000000000000000000000000000000000000000' &&
+          hashFiles('patches/fork.yaml') == ''
         run: bunx commitlint --from "${{ github.event.before }}" --to "${{ github.sha }}" --verbose
 
       - name: Format check
