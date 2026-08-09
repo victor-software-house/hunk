@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.0-beta.5
+
+### Patch Changes
+
+- Show History as one ordered commit timeline with attached refs and full selected-target details ([`27daf12`](https://github.com/victor-software-house/hunk/commit/27daf12235db612c4cec1c389c10c9c25b4af5c4)).
+
 ## 0.18.0-beta.4
 
 ### Patch Changes
