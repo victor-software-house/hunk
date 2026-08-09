@@ -6,7 +6,8 @@
     "@hunk/session-broker": "0.0.0",
     "@hunk/session-broker-bun": "0.0.0",
     "@hunk/session-broker-core": "0.0.0",
-    "@hunk/session-broker-node": "0.0.0"
+    "@hunk/session-broker-node": "0.0.0",
+    "@hunk/term-video": "0.0.0"
   },
   "changesets": [
     "afraid-suns-hear",
@@ -24,6 +25,7 @@
     "cool-papayas-itch",
     "cool-turtles-tickle",
     "ctrl-chord-control-characters",
+    "cuddly-papers-burn",
     "current-line-cursor",
     "discover-tsx-extension-entries",
     "extension-dialog-primitives",
@@ -44,6 +46,7 @@
     "homebrew-core-guidance",
     "humble-poets-flash",
     "inject-sidebar-keybindings",
+    "inline-edit-example",
     "isolate-test-git-config",
     "key-owner-routing",
     "landing-page-depth",
@@ -56,7 +59,9 @@
     "multi-sidebars-commands",
     "native-recursive-watch",
     "neat-bottles-watch",
+    "ninety-mirrors-sleep",
     "pager-full-review-controls",
+    "persistent-history-highlight",
     "plenty-suns-mate",
     "polished-docs-experience",
     "polite-clocks-count",
@@ -79,6 +84,7 @@
     "steady-file-jump-align",
     "steady-step-scrolling",
     "sturdy-state-writes",
+    "tall-emus-bathe",
     "teach-stml-note-composition",
     "thirty-islands-reply",
     "twelve-dancers-marry",
