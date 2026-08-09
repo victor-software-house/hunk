@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.0-beta.4
+
+### Patch Changes
+
+- Keep an applied History range highlighted after the review reloads ([`83225cd`](https://github.com/victor-software-house/hunk/commit/83225cdc0a30ca22498868a1fa47d88bd7894f0a)).
+
 ## 0.18.0-beta.3
 
 ### Patch Changes
