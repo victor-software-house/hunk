@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.0-beta.6
+
+### Patch Changes
+
+- Render reactivated review tabs without waiting for scroll input, share View settings across tabs, and add theme-aware tab hover feedback ([`be3c0af`](https://github.com/victor-software-house/hunk/commit/be3c0af1c7536482c0238f618feeed4388cea660)).
+
 ## 0.18.0-beta.5
 
 ### Patch Changes
